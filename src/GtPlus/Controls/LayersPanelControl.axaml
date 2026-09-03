@@ -1,0 +1,62 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="GtPlus.Controls.LayersPanelControl">
+    <Border Background="#141414" BorderBrush="#333333" BorderThickness="1,0,0,0">
+        <DockPanel>
+            <Border DockPanel.Dock="Top"
+                    Background="#1a1a1a"
+                    Padding="10,6"
+                    BorderBrush="#333333"
+                    BorderThickness="0,0,0,1">
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                    <TextBlock Grid.Column="0"
+                               Text="LAYERS"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               Foreground="#888888" />
+                    <Button Grid.Column="1"
+                            x:Name="NewLayerButton"
+                            Content="+"
+                            Width="20" Height="20"
+                            Padding="0"
+                            FontSize="13"
+                            Background="Transparent"
+                            Foreground="#cccccc"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            ToolTip.Tip="New layer (Ctrl+Shift+N)"
+                            Click="NewLayerButton_Click" />
+                    <Button Grid.Column="2"
+                            x:Name="DuplicateLayerButton"
+                            Content="⧉"
+                            Width="20" Height="20"
+                            Padding="0"
+                            FontSize="12"
+                            Background="Transparent"
+                            Foreground="#cccccc"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            ToolTip.Tip="Duplicate layer"
+                            Click="DuplicateLayerButton_Click" />
+                    <Button Grid.Column="3"
+                            x:Name="DeleteLayerButton"
+                            Content="✕"
+                            Width="20" Height="20"
+                            Padding="0"
+                            FontSize="11"
+                            Background="Transparent"
+                            Foreground="#cccccc"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            ToolTip.Tip="Delete layer"
+                            Click="DeleteLayerButton_Click" />
+                </Grid>
+            </Border>
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="LayersStack" Spacing="0" />
+            </ScrollViewer>
+        </DockPanel>
+    </Border>
+</UserControl>

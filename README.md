@@ -22,7 +22,7 @@ dotnet --version
 ## Running (dev)
 
 ```bash
-cd src/VmixGtPlus
+cd src/GtPlus
 dotnet run
 ```
 
@@ -77,7 +77,7 @@ Windows cannot set the Unix executable bit, so the Linux and macOS binaries need
 ### Manual publish
 
 ```bash
-dotnet publish src/VmixGtPlus -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o dist/win-x64
+dotnet publish src/GtPlus -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o dist/win-x64
 ```
 
 Substitute `linux-x64`, `osx-x64` or `osx-arm64` for other platforms.
@@ -87,7 +87,7 @@ Substitute `linux-x64`, `osx-x64` or `osx-arm64` for other platforms.
 ## Project structure
 
 ```
-src/VmixGtPlus/
+src/GtPlus/
 ├── Models/
 │   └── GtModels.cs          # Domain types: GtDocument, GtLayer, GtTextBlock, etc.
 ├── Services/
@@ -105,7 +105,7 @@ src/VmixGtPlus/
 
 ## Icons
 
-UI icons are PNG files in [src/VmixGtPlus/Assets/Icons/](src/VmixGtPlus/Assets/Icons/), embedded
+UI icons are PNG files in [src/GtPlus/Assets/Icons/](src/GtPlus/Assets/Icons/), embedded
 via `<AvaloniaResource Include="Assets\**" />` and loaded at runtime by filename.
 
 Layers panel:
@@ -124,7 +124,7 @@ changes locks, and a lock drag never changes visibility. Each row is toggled at
 most once per gesture, so sweeping back over a row does not flip it again. The whole
 sweep lands in the history as a single undoable entry (e.g. *Hide 6 items*).
 
-See [Assets/Icons/README.md](src/VmixGtPlus/Assets/Icons/README.md) for the full list
+See [Assets/Icons/README.md](src/GtPlus/Assets/Icons/README.md) for the full list
 (alignment, clipboard) and the size/style specs.
 
 ---

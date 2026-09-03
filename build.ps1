@@ -64,7 +64,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $RepoRoot    = $PSScriptRoot
-$ProjectPath = Join-Path $RepoRoot 'src/VmixGtPlus/VmixGtPlus.csproj'
+$ProjectPath = Join-Path $RepoRoot 'src/GtPlus/GtPlus.csproj'
 $VersionFile = Join-Path $RepoRoot 'version.json'
 $DistRoot    = Join-Path $RepoRoot 'dist'
 $ExeBaseName = 'GTPlus'
@@ -144,10 +144,10 @@ foreach ($rt in $Runtime) {
     }
 
     # Rename the published host to GTPlus-<version>. The single-file host does
-    # not care about its own filename, and the assembly name stays VmixGtPlus
+    # not care about its own filename, and the assembly name stays GtPlus
     # so avares:// resource URIs keep resolving.
     $isWin = $rt.StartsWith('win')
-    $srcExe    = Join-Path $ridDir ($isWin ? 'VmixGtPlus.exe' : 'VmixGtPlus')
+    $srcExe    = Join-Path $ridDir ($isWin ? 'GtPlus.exe' : 'GtPlus')
     $dstName   = if ($isWin) { "$ExeBaseName-$version.exe" } else { "$ExeBaseName-$version" }
 
     if (-not (Test-Path $srcExe)) {

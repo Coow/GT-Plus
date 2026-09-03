@@ -1,0 +1,325 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:GtPlus.Controls"
+             x:Class="GtPlus.Controls.TimelinePanelControl">
+
+    <UserControl.Styles>
+        <!-- the bar is as tall as the direction pad, so every input in it is pinned to one height and centred; left to stretch they would grow to the full bar height and sit their text against the top edge -->
+        <Style Selector="TextBox">
+            <Setter Property="Height" Value="24" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="ComboBox">
+            <Setter Property="Height" Value="24" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+
+        <!-- the 3x3 direction pad: nine compact square buttons, GT-style -->
+        <Style Selector="ToggleButton.dirpad">
+            <Setter Property="Width" Value="20" />
+            <Setter Property="Height" Value="20" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="2" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="ToggleButton.dirpad:checked /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#4d9ae0" />
+        </Style>
+        <Style Selector="ToggleButton.dirpad:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#5fa9e8" />
+        </Style>
+        <!-- a clip whose type carries no direction greys the pad out rather than hiding it and lights the centre dot to say so; muted blue reads as "set but not editable" -->
+        <Style Selector="ToggleButton.dirpad:disabled:checked /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#3a5f80" />
+        </Style>
+        <Style Selector="ToggleButton.dirpad:disabled Image">
+            <Setter Property="Opacity" Value="0.35" />
+        </Style>
+        <Style Selector="ToggleButton.dirpad:disabled:checked Image">
+            <Setter Property="Opacity" Value="0.75" />
+        </Style>
+    </UserControl.Styles>
+
+    <Border Background="#141414" BorderBrush="#333333" BorderThickness="0,1,0,0">
+        <DockPanel>
+
+            <!-- drag the top edge to resize the panel -->
+            <Border x:Name="ResizeGrip" DockPanel.Dock="Top"
+                    Height="6" Background="#1a1a1a"
+                    Cursor="SizeNorthSouth"
+                    ToolTip.Tip="Drag to resize the timeline"
+                    PointerPressed="ResizeGrip_PointerPressed"
+                    PointerMoved="ResizeGrip_PointerMoved"
+                    PointerReleased="ResizeGrip_PointerReleased">
+                <Rectangle Width="34" Height="2" RadiusX="1" RadiusY="1"
+                           Fill="#4a4a4a"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+
+            <!-- the one timeline bar: storyboard picker, transport, clip controls, zoom -->
+            <Border DockPanel.Dock="Top" Background="#1a1a1a" Padding="8,4"
+                    BorderBrush="#333333" BorderThickness="0,0,0,1">
+                <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto,Auto">
+
+                    <TextBlock Grid.Column="0" Text="TIMELINE" FontSize="10" FontWeight="SemiBold"
+                               Foreground="#4d9ae0" VerticalAlignment="Center" Margin="0,0,10,0" />
+
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="3"
+                                VerticalAlignment="Center">
+                        <ComboBox x:Name="StoryboardCombo" MinWidth="172" FontSize="11"
+                                  Padding="6,2" VerticalAlignment="Center"
+                                  ToolTip.Tip="Storyboard to preview and edit. A filled dot marks one that already has animations."
+                                  SelectionChanged="StoryboardCombo_SelectionChanged">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="controls:TimelineView">
+                                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <!-- filled = has animations, hollow = empty -->
+                                        <Ellipse Width="7" Height="7" VerticalAlignment="Center"
+                                                 Fill="#4d9ae0"
+                                                 IsVisible="{Binding HasAnimations}" />
+                                        <Ellipse Width="7" Height="7" VerticalAlignment="Center"
+                                                 Stroke="#5a5a5a" StrokeThickness="1"
+                                                 IsVisible="{Binding !HasAnimations}" />
+                                        <TextBlock Text="{Binding Label}" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding CountText}" Foreground="#777777"
+                                                   VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+
+                        <Button x:Name="NewStoryboardButton" Content="+" FontSize="12"
+                                Padding="8,1" VerticalAlignment="Center"
+                                ToolTip.Tip="Create a storyboard"
+                                Click="NewStoryboard_Click" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="3"
+                                VerticalAlignment="Center" Margin="8,0,0,0">
+                        <Button x:Name="PlayButton" Width="28" Padding="0,2"
+                                ToolTip.Tip="Play / pause (Space)" Click="Play_Click">
+                            <Image x:Name="PlayIcon"
+                                   Source="avares://GtPlus/Assets/Icons/play.png"
+                                   Width="14" Height="14" VerticalAlignment="Center" />
+                        </Button>
+                        <Button x:Name="StopButton" Width="28" Padding="0,2"
+                                ToolTip.Tip="Stop and rewind" Click="Stop_Click">
+                            <Image Source="avares://GtPlus/Assets/Icons/stop.png"
+                                   Width="14" Height="14" VerticalAlignment="Center" />
+                        </Button>
+                        <ToggleButton x:Name="LoopButton" Width="28" Padding="0,2"
+                                      ToolTip.Tip="Loop playback">
+                            <Image Source="avares://GtPlus/Assets/Icons/repeat.png"
+                                   Width="14" Height="14" VerticalAlignment="Center" />
+                        </ToggleButton>
+                        <ToggleButton x:Name="PreviewButton" Width="28" Padding="0,2"
+                                      IsChecked="False" Margin="6,0,0,0"
+                                      ToolTip.Tip="Preview the storyboard on the canvas. Switch off to show the document at rest so elements can be selected, moved and resized again."
+                                      IsCheckedChanged="Preview_Changed">
+                            <Image Source="avares://GtPlus/Assets/Icons/preview.png"
+                                   Width="14" Height="14" VerticalAlignment="Center" />
+                        </ToggleButton>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6"
+                                VerticalAlignment="Center" Margin="10,0,0,0">
+                        <TextBlock x:Name="TimeLabel" Text="0.00 / 0.00s"
+                                   FontFamily="Consolas,Courier New,monospace" FontSize="11"
+                                   Foreground="#cccccc" VerticalAlignment="Center" />
+
+                        <TextBlock x:Name="FpsLabel" Text="-- fps"
+                                   FontFamily="Consolas,Courier New,monospace" FontSize="11"
+                                   Foreground="#666666" VerticalAlignment="Center" Margin="6,0,0,0"
+                                   ToolTip.Tip="Frames the canvas actually painted per second during playback, and the average time spent drawing one frame" />
+
+                        <!-- only meaningful for the combined TransitionIn + TransitionOut view -->
+                        <StackPanel x:Name="HoldPanel" Orientation="Horizontal" Spacing="4"
+                                    VerticalAlignment="Center" IsVisible="False">
+                            <TextBlock x:Name="HoldLabel" Text="Hold" FontSize="11" Foreground="#888888"
+                                       VerticalAlignment="Center" Margin="6,0,0,0"
+                                       ToolTip.Tip="Drag left/right to scrub. Alt = fine, Shift = coarse." />
+                            <TextBox x:Name="HoldBox" Width="48" FontSize="11" Padding="5,1"
+                                     ToolTip.Tip="Seconds the template stays live before TransitionOut plays (preview only)"
+                                     LostFocus="HoldBox_Changed" KeyDown="HoldBox_KeyDown" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- clip controls share the one timeline bar with the transport; nothing here is ever hidden, controls that do not apply to the selected clip grey out instead so the bar never reflows as the selection moves between clips, and it scrolls sideways when the window is too narrow -->
+                    <ScrollViewer Grid.Column="4" Margin="12,0,0,0"
+                                  HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Disabled"
+                                  VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+
+                    <Button x:Name="AddButton" Content="+ Animation" FontSize="11" Padding="8,2"
+                            VerticalAlignment="Center"
+                            ToolTip.Tip="Add an animation for the selected element"
+                            Click="AddAnimation_Click" />
+                    <Button x:Name="DeleteButton" Content="Delete" FontSize="11" Padding="8,2"
+                            IsEnabled="False" VerticalAlignment="Center" Margin="-4,0,0,0"
+                            ToolTip.Tip="Delete the selected animation"
+                            Click="DeleteAnimation_Click" />
+
+                    <!-- everything that edits the selected clip; greys out as a block when nothing is selected, leaving "+ Animation" usable -->
+                    <StackPanel x:Name="ClipProperties" Orientation="Horizontal" Spacing="10"
+                                VerticalAlignment="Center" IsEnabled="False">
+
+                    <!-- shown only while more than one clip is selected -->
+                    <Border x:Name="SelectionBadge" Background="#24405c" CornerRadius="3"
+                            Padding="6,2" VerticalAlignment="Center" IsVisible="False"
+                            ToolTip.Tip="Edits in this strip apply to every selected clip">
+                        <TextBlock x:Name="SelectionLabel" Text="" FontSize="11"
+                                   Foreground="#9ccdf5" VerticalAlignment="Center" />
+                    </Border>
+
+                    <TextBlock Text="Type" FontSize="11" Foreground="#888888" VerticalAlignment="Center" />
+                    <ComboBox x:Name="TypeCombo" MinWidth="120" FontSize="11" Padding="6,1"
+                              SelectionChanged="AnimationProperty_Changed" />
+
+                    <TextBlock Text="Object" FontSize="11" Foreground="#888888" VerticalAlignment="Center" />
+                    <ComboBox x:Name="ObjectCombo" MinWidth="130" FontSize="11" Padding="6,1"
+                              SelectionChanged="AnimationProperty_Changed" />
+
+                    <TextBlock x:Name="DelayLabel" Text="Delay" FontSize="11" Foreground="#888888"
+                               VerticalAlignment="Center"
+                               ToolTip.Tip="Drag left/right to scrub. Alt = fine, Shift = coarse." />
+                    <TextBox x:Name="DelayBox" Width="56" FontSize="11" Padding="5,1"
+                             ToolTip.Tip="Seconds before the animation starts. Negative delays are pre-roll: vMix computes the animation before the title goes live, so it is already part-way through at 0."
+                             LostFocus="AnimationTiming_Committed" KeyDown="TimingBox_KeyDown" />
+
+                    <!-- Duration and Speed are alternatives, a continuous animation runs off one and everything else off the other, but both keep their place so the strip does not shuffle when the type changes -->
+                    <TextBlock x:Name="DurationLabel" Text="Duration" FontSize="11"
+                               Foreground="#888888" VerticalAlignment="Center"
+                               ToolTip.Tip="Drag left/right to scrub. Alt = fine, Shift = coarse." />
+                    <TextBox x:Name="DurationBox" Width="56" FontSize="11" Padding="5,1"
+                             VerticalAlignment="Center"
+                             LostFocus="AnimationTiming_Committed" KeyDown="TimingBox_KeyDown" />
+
+                    <TextBlock x:Name="SpeedLabel" Text="Speed" FontSize="11"
+                               Foreground="#888888" VerticalAlignment="Center"
+                               ToolTip.Tip="Drag left/right to scrub. Alt = fine, Shift = coarse." />
+                    <TextBox x:Name="SpeedBox" Width="56" FontSize="11" Padding="5,1"
+                             VerticalAlignment="Center"
+                             ToolTip.Tip="Cycles per second: one full turn every 1/Speed seconds"
+                             LostFocus="AnimationTiming_Committed" KeyDown="TimingBox_KeyDown" />
+
+                    <TextBlock Text="Easing" FontSize="11" Foreground="#888888" VerticalAlignment="Center" />
+                    <ComboBox x:Name="EasingCombo" MinWidth="130" FontSize="11" Padding="6,1"
+                              SelectionChanged="AnimationProperty_Changed" />
+
+                    <!-- GT's direction pad: the button's place in the grid is the direction, the arrow on it is the way the animation travels -->
+                    <StackPanel x:Name="DirectionPanel" Orientation="Vertical" Spacing="2"
+                                VerticalAlignment="Center"
+                                ToolTip.Tip="Fly/Bounce: edge it comes from. Scroll: edge it travels toward. Expand: corner it grows out of. Reveal: where the wipe starts. Rotate: axis and sign.">
+                        <TextBlock x:Name="DirectionLabel" Text="Direction" FontSize="11"
+                                   Foreground="#888888" HorizontalAlignment="Center" />
+                        <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto,Auto,Auto"
+                              HorizontalAlignment="Center">
+                            <ToggleButton x:Name="DirTopLeft" Classes="dirpad" Grid.Row="0" Grid.Column="0"
+                                          Tag="TopLeft" Margin="0,0,2,2"
+                                          ToolTip.Tip="Top left" Click="DirectionButton_Click">
+                                <Image Source="avares://GtPlus/Assets/Icons/arrow-down-right.png"
+                                       Width="13" Height="13" />
+                            </ToggleButton>
+                            <ToggleButton x:Name="DirTop" Classes="dirpad" Grid.Row="0" Grid.Column="1"
+                                          Tag="Top" Margin="0,0,2,2"
+                                          ToolTip.Tip="Top" Click="DirectionButton_Click">
+                                <Image Source="avares://GtPlus/Assets/Icons/arrow-down.png"
+                                       Width="13" Height="13" />
+                            </ToggleButton>
+                            <ToggleButton x:Name="DirTopRight" Classes="dirpad" Grid.Row="0" Grid.Column="2"
+                                          Tag="TopRight" Margin="0,0,0,2"
+                                          ToolTip.Tip="Top right" Click="DirectionButton_Click">
+                                <Image Source="avares://GtPlus/Assets/Icons/arrow-down-left.png"
+                                       Width="13" Height="13" />
+                            </ToggleButton>
+
+                            <ToggleButton x:Name="DirLeft" Classes="dirpad" Grid.Row="1" Grid.Column="0"
+                                          Tag="Left" Margin="0,0,2,2"
+                                          ToolTip.Tip="Left" Click="DirectionButton_Click">
+                                <Image Source="avares://GtPlus/Assets/Icons/arrow-right.png"
+                                       Width="13" Height="13" />
+                            </ToggleButton>
+                            <ToggleButton x:Name="DirCenter" Classes="dirpad" Grid.Row="1" Grid.Column="1"
+                                          Tag="Center" Margin="0,0,2,2"
+                                          ToolTip.Tip="Center" Click="DirectionButton_Click">
+                                <Image Source="avares://GtPlus/Assets/Icons/no-direction.png"
+                                       Width="13" Height="13" />
+                            </ToggleButton>
+                            <ToggleButton x:Name="DirRight" Classes="dirpad" Grid.Row="1" Grid.Column="2"
+                                          Tag="Right" Margin="0,0,0,2"
+                                          ToolTip.Tip="Right" Click="DirectionButton_Click">
+                                <Image Source="avares://GtPlus/Assets/Icons/arrow-left.png"
+                                       Width="13" Height="13" />
+                            </ToggleButton>
+
+                            <ToggleButton x:Name="DirBottomLeft" Classes="dirpad" Grid.Row="2" Grid.Column="0"
+                                          Tag="BottomLeft" Margin="0,0,2,0"
+                                          ToolTip.Tip="Bottom left" Click="DirectionButton_Click">
+                                <Image Source="avares://GtPlus/Assets/Icons/arrow-up-right.png"
+                                       Width="13" Height="13" />
+                            </ToggleButton>
+                            <ToggleButton x:Name="DirBottom" Classes="dirpad" Grid.Row="2" Grid.Column="1"
+                                          Tag="Bottom" Margin="0,0,2,0"
+                                          ToolTip.Tip="Bottom" Click="DirectionButton_Click">
+                                <Image Source="avares://GtPlus/Assets/Icons/arrow-up.png"
+                                       Width="13" Height="13" />
+                            </ToggleButton>
+                            <ToggleButton x:Name="DirBottomRight" Classes="dirpad" Grid.Row="2" Grid.Column="2"
+                                          Tag="BottomRight"
+                                          ToolTip.Tip="Bottom right" Click="DirectionButton_Click">
+                                <Image Source="avares://GtPlus/Assets/Icons/arrow-up-left.png"
+                                       Width="13" Height="13" />
+                            </ToggleButton>
+                        </Grid>
+                    </StackPanel>
+
+                    <ComboBox x:Name="AxisCombo" MinWidth="70" FontSize="11" Padding="6,1"
+                              VerticalAlignment="Center"
+                              ToolTip.Tip="Axis a Center reveal opens along"
+                              SelectionChanged="AnimationProperty_Changed" />
+
+                    <CheckBox x:Name="ReverseCheck" Content="Reverse" FontSize="11"
+                              VerticalAlignment="Center"
+                              IsCheckedChanged="AnimationProperty_Changed" />
+                    </StackPanel>
+                </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- GT's three-animations-per-object limit is reported here -->
+                    <TextBlock x:Name="LimitLabel" Grid.Column="5" Text="" FontSize="11"
+                               Foreground="#e0a24d" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" MaxWidth="220" Margin="12,0,12,0"
+                               IsVisible="False" />
+
+                    <Slider x:Name="ZoomSlider" Grid.Column="6"
+                            Minimum="12" Maximum="600" Value="70" Width="90"
+                            VerticalAlignment="Center" Margin="8,0,0,0"
+                            ToolTip.Tip="Timeline zoom"
+                            ValueChanged="ZoomSlider_ValueChanged" />
+
+                    <Button Grid.Column="7" Content="✕" FontSize="11" Padding="7,2" Margin="6,0,0,0"
+                            VerticalAlignment="Center"
+                            ToolTip.Tip="Close timeline (Ctrl+T)" Click="Close_Click" />
+                </Grid>
+            </Border>
+
+            <!-- track area -->
+            <ScrollViewer x:Name="TrackScroller"
+                          HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Auto">
+                <controls:TimelineTrackControl x:Name="Track"
+                                               HorizontalAlignment="Left"
+                                               VerticalAlignment="Top" />
+            </ScrollViewer>
+
+        </DockPanel>
+    </Border>
+</UserControl>

@@ -10,13 +10,13 @@ Don't automatically commit to git
 
 **Framework:** Avalonia 12.1.2, .NET 10, C# - target `net10.0`.
 
-**Project file:** `src/VmixGtPlus/VmixGtPlus.csproj`
+**Project file:** `src/GtPlus/GtPlus.csproj`
 
 ---
 
 ## Source layout
 
-### Models - `src/VmixGtPlus/Models/`
+### Models - `src/GtPlus/Models/`
 - **`GtModels.cs`** - all data model classes
   - `GtDocument` - root; holds `Width`, `Height`, `List<GtLayer>`
   - `GtLayer` - named layer; `Location` (GtPoint), `Dimensions` (GtSize), `InnerWidth/Height`, `List<GtElement>`, `Locked`, `Visible`
@@ -30,7 +30,7 @@ Don't automatically commit to git
     `DataName` scopes a DataChangeIn/Out storyboard to one data field, empty means any field
   - `GtPoint(X,Y)`, `GtSize(Width,Height)` - immutable records; `Location`/`Dimensions` properties have setters so assign `new GtPoint(x,y)` to mutate
 
-### Services - `src/VmixGtPlus/Services/`
+### Services - `src/GtPlus/Services/`
 - **`GtZipReader.cs`** - reads `.gtzip` → `(GtDocument, Dictionary<string,byte[]> assets)`. Assets keyed by logical path (forward-slash normalised).
 - **`GtZipWriter.cs`** - writes `(GtDocument, assets)` → `.gtzip`. Generates fresh GUIDs for asset blobs. Writes `document.xml` as UTF-8 (no BOM). Atomic write via temp file + rename.
 - **`HistoryService.cs`** - undo/redo stack. `IHistoryAction` interface. Concrete actions: `MoveElementsAction`, `ResizeElementsAction`. `HistoryService.Push/Undo/Redo/Clear`, fires `Changed` event.
@@ -42,11 +42,11 @@ Don't automatically commit to git
   DataChangeIn/Out storyboard can be keyed to; `Hidden`/`NoEvents` fields are not offered
 - **`TickerLayout.cs`** - ticker text splitting + GT's per-frame scroll walk, replayed as a pure
   function of the frame number (`Simulate`) or laid out flush at rest (`Rest`)
-- **`FfmpegService.cs`** - locates the ffmpeg binary (prefs path → app dir → PATH → usual install dirs); can download the official Windows build into `%APPDATA%/VmixGtPlus/ffmpeg`
+- **`FfmpegService.cs`** - locates the ffmpeg binary (prefs path → app dir → PATH → usual install dirs); can download the official Windows build into `%APPDATA%/GtPlus/ffmpeg`
 - **`VideoExportService.cs`** - MP4 export. Drives `GtCanvasControl.AnimationFrame` + `ExportToBitmap()` one frame at a time on the UI thread and pipes raw BGRA into ffmpeg's stdin via a bounded background writer
 - **`Logger.cs`** - static logger
 
-### Controls - `src/VmixGtPlus/Controls/`
+### Controls - `src/GtPlus/Controls/`
 - **`GtCanvasControl.cs`** - main canvas; renders document, handles selection + move + resize
   - Enums: `CanvasTool { Select, Edit, TextBox, Rectangle, Ticker }`, `ResizeHandle { None, NW, N, NE, E, SE, S, SW, W }`
   - Styled props: `Zoom`, `OutsideCanvasOpacity`, `ActiveTool`
@@ -63,7 +63,7 @@ Don't automatically commit to git
 - **`LayersPanelControl.axaml/.cs`** - layers panel; populated via `Populate(GtDocument)`, syncs selection highlight via `Canvas` property
 - **`HistoryPanelControl.axaml/.cs`** - history list; set `History` property to wire up; auto-refreshes on `HistoryService.Changed`
 
-### Views - `src/VmixGtPlus/Views/`
+### Views - `src/GtPlus/Views/`
 - **`MainWindow.axaml/.cs`** - main window
   - Fields: `_currentPath` (open file path), `_currentAssets` (asset dict), `_history`, `_reader`, `_writer`
   - File menu built in code via `RebuildFileMenu()` - includes Open, Save (Ctrl+S), Save As (Ctrl+Shift+S), recent files, Exit

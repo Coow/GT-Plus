@@ -1,0 +1,234 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="GtPlus.Controls.ColorPickerControl"
+             Width="300">
+
+    <UserControl.Styles>
+        <Style Selector="Button#GradientButton">
+            <Setter Property="Background" Value="#2d2d2d"/>
+            <Setter Property="BorderBrush" Value="#484848"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="3"/>
+            <Setter Property="Padding" Value="6,4"/>
+        </Style>
+        <Style Selector="Button#GradientButton:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#3a3a3a"/>
+            <Setter Property="BorderBrush" Value="#6a6a6a"/>
+        </Style>
+        <Style Selector="Button#GradientButton:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="#252525"/>
+            <Setter Property="BorderBrush" Value="#6a6a6a"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Border Background="#1c1c1c"
+            BorderBrush="#484848"
+            BorderThickness="1"
+            CornerRadius="4"
+            Padding="8">
+        <StackPanel Spacing="6">
+
+            <!-- spectrum: SV plane at fixed hue -->
+            <Panel x:Name="SpectrumPanel" Height="150" Cursor="Cross">
+                <Border x:Name="SpectrumHueBg" CornerRadius="2"/>
+                <Border CornerRadius="2">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0%,50%" EndPoint="100%,50%">
+                            <GradientStop Color="#FFFFFFFF" Offset="0"/>
+                            <GradientStop Color="#00FFFFFF" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                </Border>
+                <Border CornerRadius="2">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="50%,0%" EndPoint="50%,100%">
+                            <GradientStop Color="#00000000" Offset="0"/>
+                            <GradientStop Color="#FF000000" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                </Border>
+                <Canvas x:Name="SpectrumCanvas">
+                    <Ellipse x:Name="SpectrumThumb"
+                             Width="12" Height="12"
+                             Stroke="White" StrokeThickness="2"
+                             Fill="Transparent"
+                             IsHitTestVisible="False"/>
+                </Canvas>
+            </Panel>
+
+            <!-- hue bar -->
+            <Panel x:Name="HuePanel" Height="14" Cursor="SizeWestEast">
+                <Border CornerRadius="2">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0%,50%" EndPoint="100%,50%">
+                            <GradientStop Color="#FFFF0000" Offset="0"/>
+                            <GradientStop Color="#FFFFFF00" Offset="0.167"/>
+                            <GradientStop Color="#FF00FF00" Offset="0.333"/>
+                            <GradientStop Color="#FF00FFFF" Offset="0.5"/>
+                            <GradientStop Color="#FF0000FF" Offset="0.667"/>
+                            <GradientStop Color="#FFFF00FF" Offset="0.833"/>
+                            <GradientStop Color="#FFFF0000" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                </Border>
+                <Canvas x:Name="HueCanvas">
+                    <Border x:Name="HueThumb"
+                            Width="4" Height="14"
+                            Background="White"
+                            BorderBrush="#666666" BorderThickness="1"
+                            CornerRadius="1"
+                            IsHitTestVisible="False"/>
+                </Canvas>
+            </Panel>
+
+            <!-- alpha bar -->
+            <Panel x:Name="AlphaPanel" Height="14" Cursor="SizeWestEast">
+                <Border CornerRadius="2" Background="#888888"/>
+                <Border x:Name="AlphaGradientBorder" CornerRadius="2"/>
+                <Canvas x:Name="AlphaCanvas">
+                    <Border x:Name="AlphaThumb"
+                            Width="4" Height="14"
+                            Background="White"
+                            BorderBrush="#666666" BorderThickness="1"
+                            CornerRadius="1"
+                            IsHitTestVisible="False"/>
+                </Canvas>
+            </Panel>
+
+            <!-- preview swatch + hex + copy/paste -->
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+
+                <!-- checkerboard + colour preview swatch -->
+                <Panel Grid.Column="0" Width="28" Height="28" Margin="0,0,6,0">
+                    <Border CornerRadius="3" BorderBrush="#444444" BorderThickness="1"
+                            Background="#888888"/>
+                    <Border x:Name="PreviewBorder"
+                            CornerRadius="3" BorderBrush="#444444" BorderThickness="1"/>
+                </Panel>
+
+                <!-- HEX display -->
+                <Border Grid.Column="1"
+                        Background="#2d2d2d" BorderBrush="#484848"
+                        BorderThickness="1" CornerRadius="3"
+                        Padding="4,2" VerticalAlignment="Center">
+                    <TextBlock x:Name="HexText"
+                               Text="#FFFFFFFF"
+                               Foreground="White"
+                               FontSize="11"
+                               FontFamily="Consolas,Courier New,monospace"
+                               VerticalAlignment="Center"/>
+                </Border>
+
+                <!-- paste HEX from clipboard (icon set in code-behind) -->
+                <Button Grid.Column="2"
+                        x:Name="PasteHexButton"
+                        FontSize="11"
+                        Width="28" Height="28"
+                        Padding="4"
+                        Margin="4,0,0,0"
+                        ToolTip.Tip="Paste HEX from clipboard"
+                        HorizontalContentAlignment="Center"
+                        VerticalContentAlignment="Center"
+                        Click="PasteHexButton_Click"/>
+
+                <!-- copy HEX to clipboard (icon set in code-behind) -->
+                <Button Grid.Column="3"
+                        x:Name="CopyHexButton"
+                        FontSize="13"
+                        Width="28" Height="28"
+                        Padding="4"
+                        Margin="2,0,0,0"
+                        ToolTip.Tip="Copy HEX to clipboard"
+                        HorizontalContentAlignment="Center"
+                        VerticalContentAlignment="Center"
+                        Click="CopyHexButton_Click"/>
+
+            </Grid>
+
+            <!-- RGBA display -->
+            <Grid ColumnDefinitions="14,*,3,14,*,3,14,*,3,14,*">
+                <TextBlock Grid.Column="0" Text="R" FontSize="10"
+                           Foreground="#888888" VerticalAlignment="Center"
+                           HorizontalAlignment="Center"/>
+                <Border Grid.Column="1" Background="#2d2d2d" BorderBrush="#484848"
+                        BorderThickness="1" CornerRadius="3" Padding="3,2">
+                    <TextBlock x:Name="RText" FontSize="10" Foreground="White"
+                               VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                </Border>
+
+                <TextBlock Grid.Column="3" Text="G" FontSize="10"
+                           Foreground="#888888" VerticalAlignment="Center"
+                           HorizontalAlignment="Center"/>
+                <Border Grid.Column="4" Background="#2d2d2d" BorderBrush="#484848"
+                        BorderThickness="1" CornerRadius="3" Padding="3,2">
+                    <TextBlock x:Name="GText" FontSize="10" Foreground="White"
+                               VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                </Border>
+
+                <TextBlock Grid.Column="6" Text="B" FontSize="10"
+                           Foreground="#888888" VerticalAlignment="Center"
+                           HorizontalAlignment="Center"/>
+                <Border Grid.Column="7" Background="#2d2d2d" BorderBrush="#484848"
+                        BorderThickness="1" CornerRadius="3" Padding="3,2">
+                    <TextBlock x:Name="BText" FontSize="10" Foreground="White"
+                               VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                </Border>
+
+                <TextBlock Grid.Column="9" Text="A" FontSize="10"
+                           Foreground="#888888" VerticalAlignment="Center"
+                           HorizontalAlignment="Center"/>
+                <Border Grid.Column="10" Background="#2d2d2d" BorderBrush="#484848"
+                        BorderThickness="1" CornerRadius="3" Padding="3,2">
+                    <TextBlock x:Name="AText" FontSize="10" Foreground="White"
+                               VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                </Border>
+            </Grid>
+
+            <!-- recent colors row -->
+            <StackPanel x:Name="RecentPanel"
+                        Orientation="Horizontal"
+                        Spacing="3"/>
+
+            <!-- switch to gradient fill -->
+            <Button x:Name="GradientButton"
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Stretch"
+                    ToolTip.Tip="Edit as a linear or radial gradient"
+                    Click="GradientButton_Click">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                    <!-- mini gradient preview chip -->
+                    <Border Grid.Column="0"
+                            Width="34" Height="14"
+                            CornerRadius="2"
+                            BorderBrush="#5a5a5a" BorderThickness="1"
+                            VerticalAlignment="Center">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0%,50%" EndPoint="100%,50%">
+                                <GradientStop Color="#FF3AA0FF" Offset="0"/>
+                                <GradientStop Color="#FFB44DFF" Offset="0.5"/>
+                                <GradientStop Color="#FFFF4D6D" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                    </Border>
+
+                    <TextBlock Grid.Column="1"
+                               Text="Gradient"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               Foreground="#e6e6e6"
+                               VerticalAlignment="Center"
+                               HorizontalAlignment="Center"/>
+
+                    <TextBlock Grid.Column="2"
+                               Text="&#x203A;"
+                               FontSize="13"
+                               Foreground="#888888"
+                               VerticalAlignment="Center"
+                               Margin="0,0,2,0"/>
+                </Grid>
+            </Button>
+
+        </StackPanel>
+    </Border>
+
+</UserControl>
