@@ -1,0 +1,40 @@
+# Build output
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.swp
+
+# VS Code (user-specific settings)
+.vscode/
+
+# Claude Code (user-specific)
+.claude/
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# .NET publish output
+publish/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+dist/
+gtzip-examples/*/

@@ -1,0 +1,11 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="VmixGtPlus.Controls.HistoryPanelControl">
+    <Border Background="#141414" BorderBrush="#333333" BorderThickness="1,0,0,0">
+        <ScrollViewer x:Name="Scroller"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+            <StackPanel x:Name="HistoryStack" Spacing="0" />
+        </ScrollViewer>
+    </Border>
+</UserControl>

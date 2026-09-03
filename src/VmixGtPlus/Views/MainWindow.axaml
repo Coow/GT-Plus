@@ -1,0 +1,457 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:VmixGtPlus.Controls"
+        x:Class="VmixGtPlus.Views.MainWindow"
+        Title="vMix GT++"
+        Width="1280" Height="780"
+        MinWidth="640" MinHeight="400"
+        Background="#0d0d0d">
+
+    <DockPanel>
+
+        <!-- menu bar -->
+        <DockPanel DockPanel.Dock="Top">
+        <Menu DockPanel.Dock="Left">
+            <MenuItem Header="_File" x:Name="FileMenu" />
+            <MenuItem Header="_Edit">
+                <MenuItem x:Name="UndoMenuItem"
+                          Header="_Undo"
+                          IsEnabled="False"
+                          InputGesture="Ctrl+Z"
+                          Click="Undo_Click" />
+                <MenuItem x:Name="RedoMenuItem"
+                          Header="_Redo"
+                          IsEnabled="False"
+                          InputGesture="Ctrl+Y"
+                          Click="Redo_Click" />
+                <Separator />
+                <MenuItem Header="_Copy"
+                          InputGesture="Ctrl+C"
+                          Click="Copy_Click" />
+                <MenuItem x:Name="PasteMenuItem"
+                          Header="_Paste"
+                          IsEnabled="False"
+                          InputGesture="Ctrl+V"
+                          Click="Paste_Click" />
+                <MenuItem x:Name="DuplicateElementMenuItem"
+                          Header="Dup_licate"
+                          IsEnabled="False"
+                          InputGesture="Ctrl+D"
+                          Click="DuplicateElement_Click" />
+                <MenuItem x:Name="DeleteElementMenuItem"
+                          Header="_Delete"
+                          IsEnabled="False"
+                          InputGesture="Delete"
+                          Click="DeleteElement_Click" />
+                <Separator />
+                <MenuItem Header="_Align">
+                    <MenuItem Header="Align _Left"             Click="AlignLeft_Click" />
+                    <MenuItem Header="Align _Horizontal Centre" Click="AlignCenterH_Click" />
+                    <MenuItem Header="Align _Right"            Click="AlignRight_Click" />
+                    <Separator />
+                    <MenuItem Header="Align _Top"              Click="AlignTop_Click" />
+                    <MenuItem Header="Align _Vertical Centre"  Click="AlignMiddle_Click" />
+                    <MenuItem Header="Align _Bottom"           Click="AlignBottom_Click" />
+                    <Separator />
+                    <MenuItem Header="_Centre in Both Axes"    Click="AlignCenterBoth_Click" />
+                </MenuItem>
+                <Separator />
+                <MenuItem Header="Replace with _Text"      Click="ReplaceWithText_Click" />
+                <MenuItem Header="Replace with _Rectangle" Click="ReplaceWithRectangle_Click" />
+                <MenuItem Header="Replace with _Ellipse"   Click="ReplaceWithEllipse_Click" />
+                <MenuItem Header="Replace with _Image..."  Click="ReplaceWithImage_Click" />
+                <MenuItem Header="Replace with Tic_ker"    Click="ReplaceWithTicker_Click" />
+                <Separator />
+                <MenuItem Header="Preferences" Click="Preferences_Click" />
+            </MenuItem>
+            <MenuItem Header="_Layer">
+                <MenuItem Header="_New Layer"
+                          InputGesture="Ctrl+Shift+N"
+                          Click="NewLayer_Click" />
+                <MenuItem Header="_Duplicate Layer"
+                          InputGesture="Ctrl+Shift+D"
+                          Click="DuplicateLayer_Click" />
+                <MenuItem x:Name="DeleteLayerMenuItem"
+                          Header="De_lete Layer"
+                          Click="DeleteLayer_Click" />
+            </MenuItem>
+            <MenuItem Header="_View">
+                <MenuItem x:Name="RulersMenuItem"
+                          Header="_Rulers"
+                          ToggleType="CheckBox"
+                          InputGesture="Ctrl+R"
+                          Click="ToggleRulers_Click" />
+                <Separator />
+                <MenuItem x:Name="ShowGuidesMenuItem"
+                          Header="Show _Guides"
+                          ToggleType="CheckBox"
+                          IsChecked="True"
+                          InputGesture="Ctrl+OemSemicolon"
+                          Click="ToggleShowGuides_Click" />
+                <MenuItem x:Name="LockGuidesMenuItem"
+                          Header="_Lock Guides"
+                          ToggleType="CheckBox"
+                          InputGesture="Ctrl+Alt+OemSemicolon"
+                          Click="ToggleLockGuides_Click" />
+                <MenuItem Header="New _Horizontal Guide" Click="NewHorizontalGuide_Click" />
+                <MenuItem Header="New _Vertical Guide"   Click="NewVerticalGuide_Click" />
+                <MenuItem x:Name="ClearGuidesMenuItem"
+                          Header="_Clear Guides"
+                          Click="ClearGuides_Click" />
+                <Separator />
+                <MenuItem x:Name="SnapMenuItem"
+                          Header="_Snap"
+                          ToggleType="CheckBox"
+                          IsChecked="True"
+                          InputGesture="Ctrl+Shift+OemSemicolon"
+                          Click="ToggleSnap_Click" />
+                <MenuItem Header="Snap _To">
+                    <MenuItem x:Name="SnapGuidesMenuItem"
+                              Header="_Guides"
+                              ToggleType="CheckBox"
+                              IsChecked="True"
+                              Click="SnapTarget_Click" />
+                    <MenuItem x:Name="SnapElementsMenuItem"
+                              Header="_Elements"
+                              ToggleType="CheckBox"
+                              IsChecked="True"
+                              Click="SnapTarget_Click" />
+                    <MenuItem x:Name="SnapCanvasMenuItem"
+                              Header="_Document Bounds"
+                              ToggleType="CheckBox"
+                              IsChecked="True"
+                              Click="SnapTarget_Click" />
+                </MenuItem>
+            </MenuItem>
+        </Menu>
+
+            <!-- tools that open their own window sit next to the menus -->
+            <Button x:Name="DataVerifierButton"
+                    Content="Data Source Verifier"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Padding="10,3"
+                    FontSize="12"
+                    ToolTip.Tip="Check a JSON / XML / CSV data source against this title's elements"
+                    Click="DataVerifier_Click" />
+        </DockPanel>
+
+        <!-- properties panel bar -->
+        <controls:PropertiesPanelControl x:Name="PropertiesPanel"
+                                         DockPanel.Dock="Top" />
+
+        <!-- bottom bar: status (left) + zoom controls (right) -->
+        <Border DockPanel.Dock="Bottom"
+                Background="#1a1a1a"
+                Padding="8,4"
+                BorderThickness="0,1,0,0"
+                BorderBrush="#333333">
+            <Grid ColumnDefinitions="*,Auto">
+
+                <TextBlock x:Name="StatusText"
+                           Grid.Column="0"
+                           Text="No file open - File › Open to load a .gtzip"
+                           Foreground="#888888"
+                           FontSize="12"
+                           VerticalAlignment="Center" />
+
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            Spacing="6"
+                            VerticalAlignment="Center">
+
+                    <TextBlock x:Name="CursorPosLabel"
+                               Text=""
+                               MinWidth="120"
+                               FontFamily="Consolas,Courier New,monospace"
+                               FontSize="11"
+                               Foreground="#999999"
+                               VerticalAlignment="Center"
+                               TextAlignment="Right"
+                               Margin="0,0,6,0" />
+
+                    <ToggleButton x:Name="TimelineToggleButton"
+                                  IsChecked="False"
+                                  Padding="8,2"
+                                  FontSize="12"
+                                  ToolTip.Tip="Storyboard Timeline (Ctrl+T)"
+                                  Click="TimelineToggleButton_Click">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <Panel Width="12" Height="12" VerticalAlignment="Center">
+                                <Path Fill="#cccccc" Stretch="None"
+                                      Data="M 0,0 L 12,0 L 12,3 L 0,3 Z M 0,5 L 7,5 L 7,8 L 0,8 Z M 3,10 L 12,10 L 12,12 L 3,12 Z" />
+                            </Panel>
+                            <TextBlock Text="Timeline" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+
+                    <ToggleButton x:Name="PreviewToggleButton"
+                                  IsChecked="False"
+                                  Padding="8,2"
+                                  FontSize="12"
+                                  ToolTip.Tip="Preview the storyboard on the canvas. Switch off to show the document at rest so elements can be selected, moved and resized again."
+                                  Click="PreviewToggleButton_Click">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <Image Source="avares://VmixGtPlus/Assets/Icons/preview.png"
+                                   Width="14" Height="14"
+                                   VerticalAlignment="Center" />
+                            <TextBlock Text="Preview" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+
+                    <ToggleButton x:Name="SnapToggleButton"
+                                  IsChecked="True"
+                                  Padding="8,2"
+                                  FontSize="12"
+                                  ToolTip.Tip="Snap (Ctrl+Shift+;) - pull elements onto guides, other elements and the canvas"
+                                  Click="SnapToggleButton_Click">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <Image Source="avares://VmixGtPlus/Assets/Icons/magnet.png"
+                                   Width="14" Height="14"
+                                   VerticalAlignment="Center" />
+                            <TextBlock Text="Snap" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+
+                    <ToggleButton x:Name="PixelGridLockButton"
+                                  IsChecked="False"
+                                  Padding="8,2"
+                                  FontSize="12"
+                                  ToolTip.Tip="Pixel Grid Lock - Snap moves and resizes to whole pixels"
+                                  Click="PixelGridLockButton_Click">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <Panel Width="12" Height="12" VerticalAlignment="Center">
+                                <Path Fill="#cccccc" Stretch="None"
+                                      Data="M 0,0 L 4,0 L 4,4 L 8,4 L 8,0 L 12,0 L 12,12 L 8,12 L 8,8 L 4,8 L 4,12 L 0,12 Z" />
+                            </Panel>
+                            <TextBlock Text="Pixel Grid" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+
+                    <Button x:Name="FitButton"
+                            Content="Fit"
+                            Padding="10,2"
+                            Click="Fit_Click"
+                            ToolTip.Tip="Reset zoom to fit window" />
+
+                    <Slider x:Name="ZoomSlider"
+                            Minimum="10" Maximum="400" Value="100"
+                            Width="160"
+                            VerticalAlignment="Center"
+                            IsSnapToTickEnabled="False"
+                            ValueChanged="ZoomSlider_ValueChanged" />
+
+                    <TextBlock x:Name="ZoomLabel"
+                               Text="100%"
+                               Width="46"
+                               FontSize="12"
+                               Foreground="#cccccc"
+                               VerticalAlignment="Center"
+                               TextAlignment="Right" />
+
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- storyboard timeline, collapsed until toggled (Ctrl+T); declared after the status bar so it docks above it -->
+        <controls:TimelinePanelControl x:Name="TimelinePanel"
+                                       DockPanel.Dock="Bottom"
+                                       Height="196"
+                                       IsVisible="False" />
+
+        <!-- left toolbar -->
+        <Border DockPanel.Dock="Left"
+                Background="#1a1a1a"
+                BorderBrush="#333333"
+                BorderThickness="0,0,1,0"
+                Padding="3,4">
+            <StackPanel Orientation="Vertical" Spacing="2">
+
+                <ToggleButton x:Name="SelectToolButton"
+                              IsChecked="True"
+                              ToolTip.Tip="Select (S) - Click or Ctrl+drag to select elements"
+                              Padding="7,7"
+                              Click="SelectToolButton_Click">
+                    <Panel Width="16" Height="16">
+                        <Path Fill="#cccccc" Stretch="None"
+                              Data="M 2,1 L 2,12 L 5,9 L 7,14 L 9,13 L 7,8 L 11,8 Z" />
+                    </Panel>
+                </ToggleButton>
+
+                <ToggleButton x:Name="EditToolButton"
+                              IsChecked="False"
+                              ToolTip.Tip="Edit (E) - Drag to move elements; hold Alt for Select"
+                              Padding="7,7"
+                              Click="EditToolButton_Click">
+                    <Panel Width="16" Height="16">
+                        <Path Fill="#cccccc" Stretch="None"
+                              Data="M 8,0 L 6,3 L 7,3 L 7,7 L 3,7 L 3,6 L 0,8 L 3,10 L 3,9 L 7,9 L 7,13 L 6,13 L 8,16 L 10,13 L 9,13 L 9,9 L 13,9 L 13,10 L 16,8 L 13,6 L 13,7 L 9,7 L 9,3 L 10,3 Z" />
+                    </Panel>
+                </ToggleButton>
+
+                <Separator Height="1" Background="#333333" Margin="4,2" />
+
+                <ToggleButton x:Name="TextBoxToolButton"
+                              IsChecked="False"
+                              ToolTip.Tip="Text Box (T) - Draw a text box"
+                              Padding="7,7"
+                              Click="TextBoxToolButton_Click">
+                    <Panel Width="16" Height="16">
+                        <Path Fill="#cccccc" Stretch="None"
+                              Data="M 0,0 L 16,0 L 16,4 L 10,4 L 10,16 L 6,16 L 6,4 L 0,4 Z" />
+                    </Panel>
+                </ToggleButton>
+
+                <ToggleButton x:Name="RectangleToolButton"
+                              IsChecked="False"
+                              ToolTip.Tip="Rectangle (R) - Draw a rectangle"
+                              Padding="7,7"
+                              Click="RectangleToolButton_Click">
+                    <Panel Width="16" Height="16">
+                        <Path Fill="#cccccc" Stretch="None"
+                              Data="F1 M 0,2 L 16,2 L 16,14 L 0,14 Z M 2,4 L 14,4 L 14,12 L 2,12 Z" />
+                    </Panel>
+                </ToggleButton>
+
+                <ToggleButton x:Name="TickerToolButton"
+                              IsChecked="False"
+                              ToolTip.Tip="Ticker (K) - Draw a scrolling ticker"
+                              Padding="7,7"
+                              Click="TickerToolButton_Click">
+                    <Panel Width="16" Height="16">
+                        <Path Fill="#cccccc" Stretch="None"
+                              Data="F1 M 0,3 L 16,3 L 16,13 L 0,13 Z M 1,4 L 1,12 L 15,12 L 15,4 Z" />
+                        <Path Fill="#cccccc" Stretch="None"
+                              Data="M 3,6 L 7,6 L 7,10 L 3,10 Z M 9,6 L 13,6 L 13,10 L 9,10 Z" />
+                    </Panel>
+                </ToggleButton>
+
+                <Button x:Name="ImageToolButton"
+                        ToolTip.Tip="Image (I) - Insert an image file"
+                        Padding="7,7"
+                        Click="ImageToolButton_Click">
+                    <Panel Width="16" Height="16">
+                        <Path Fill="#cccccc" Stretch="None"
+                              Data="F1 M 0,1 L 16,1 L 16,15 L 0,15 Z M 1,2 L 1,14 L 15,14 L 15,2 Z" />
+                        <Path Fill="#cccccc" Stretch="None"
+                              Data="M 2,12 L 5,8 L 8,11 L 10,9 L 14,12 Z" />
+                    </Panel>
+                </Button>
+
+            </StackPanel>
+        </Border>
+
+        <!-- right panel: tab strip + layers/history + optional debug -->
+        <Grid DockPanel.Dock="Right" Width="220" RowDefinitions="Auto,*,Auto">
+
+            <!-- tab strip -->
+            <Border Grid.Row="0"
+                    Background="#161616"
+                    BorderBrush="#333333"
+                    BorderThickness="1,0,0,1">
+                <Grid ColumnDefinitions="*,*">
+                    <ToggleButton x:Name="LayersTabButton"
+                                  Grid.Column="0"
+                                  IsChecked="True"
+                                  Content="Layers"
+                                  FontSize="11"
+                                  Padding="0,6"
+                                  HorizontalAlignment="Stretch"
+                                  HorizontalContentAlignment="Center"
+                                  Click="LayersTab_Click" />
+                    <ToggleButton x:Name="HistoryTabButton"
+                                  Grid.Column="1"
+                                  IsChecked="False"
+                                  Content="History"
+                                  FontSize="11"
+                                  Padding="0,6"
+                                  HorizontalAlignment="Stretch"
+                                  HorizontalContentAlignment="Center"
+                                  Click="HistoryTab_Click" />
+                </Grid>
+            </Border>
+
+            <!-- panel area, only one visible at a time -->
+            <Panel Grid.Row="1">
+                <controls:LayersPanelControl x:Name="LayersPanel" />
+                <controls:HistoryPanelControl x:Name="HistoryPanel" IsVisible="False" />
+            </Panel>
+
+            <!-- debug info panel, hidden by default, toggled in Preferences -->
+            <Border x:Name="DebugPanel"
+                    Grid.Row="2"
+                    IsVisible="False"
+                    Background="#0a0a0a"
+                    BorderBrush="#333333"
+                    BorderThickness="1,1,0,0">
+                <DockPanel MaxHeight="260">
+                    <Border DockPanel.Dock="Top"
+                            Background="#1a1a1a"
+                            Padding="10,5"
+                            BorderBrush="#333333"
+                            BorderThickness="0,0,0,1">
+                        <TextBlock Text="DEBUG"
+                                   FontSize="10"
+                                   FontWeight="SemiBold"
+                                   Foreground="#ff6060" />
+                    </Border>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <TextBlock x:Name="DebugText"
+                                   Padding="10,8"
+                                   FontFamily="Consolas,Courier New,monospace"
+                                   FontSize="11"
+                                   Foreground="#cccccc"
+                                   TextWrapping="Wrap" />
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+
+        </Grid>
+
+        <!-- canvas area: rulers along the top/left edges, dark surround, scrollbars when zoomed in -->
+        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,*">
+
+            <!-- origin box: drag onto the canvas to move 0,0, double-click to reset -->
+            <Border x:Name="RulerCorner"
+                    Grid.Row="0" Grid.Column="0"
+                    Width="18" Height="18"
+                    IsVisible="False"
+                    Background="#232323"
+                    BorderBrush="#3a3a3a"
+                    BorderThickness="0,0,1,1"
+                    ToolTip.Tip="Drag to set the ruler origin - double-click to reset"
+                    PointerPressed="RulerCorner_PointerPressed"
+                    PointerMoved="RulerCorner_PointerMoved"
+                    PointerReleased="RulerCorner_PointerReleased"
+                    DoubleTapped="RulerCorner_DoubleTapped" />
+
+            <controls:RulerControl x:Name="TopRuler"
+                                   Grid.Row="0" Grid.Column="1"
+                                   Height="18"
+                                   IsVisible="False"
+                                   Orientation="Horizontal" />
+
+            <controls:RulerControl x:Name="LeftRuler"
+                                   Grid.Row="1" Grid.Column="0"
+                                   Width="18"
+                                   IsVisible="False"
+                                   Orientation="Vertical" />
+
+            <ScrollViewer x:Name="CanvasScrollViewer"
+                          Grid.Row="1" Grid.Column="1"
+                          Background="#1a1a1a"
+                          HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Auto"
+                          AllowAutoHide="False">
+                <controls:GtCanvasControl x:Name="GtCanvas"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Margin="24" />
+            </ScrollViewer>
+        </Grid>
+
+    </DockPanel>
+</Window>

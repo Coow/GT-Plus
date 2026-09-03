@@ -1,0 +1,1156 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:VmixGtPlus.Controls"
+             x:Class="VmixGtPlus.Controls.PropertiesPanelControl">
+
+    <UserControl.Styles>
+
+        <!-- compact NumericUpDown: text on left, tiny ▲▼ on right -->
+        <Style Selector="NumericUpDown">
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Background" Value="#2d2d2d"/>
+            <Setter Property="BorderBrush" Value="#484848"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="3"/>
+            <Setter Property="Foreground" Value="#dddddd"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{TemplateBinding CornerRadius}">
+                        <Grid ColumnDefinitions="*,16">
+                            <TextBox x:Name="PART_TextBox"
+                                     Grid.Column="0"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     Padding="4,0"
+                                     MinHeight="0"
+                                     MinWidth="0"
+                                     Foreground="{TemplateBinding Foreground}"
+                                     FontFamily="{TemplateBinding FontFamily}"
+                                     FontSize="{TemplateBinding FontSize}"
+                                     IsReadOnly="{TemplateBinding IsReadOnly}"
+                                     VerticalContentAlignment="Center"
+                                     HorizontalContentAlignment="Right"/>
+                            <ButtonSpinner x:Name="PART_Spinner"
+                                           Grid.Column="1"
+                                           Background="Transparent"
+                                           BorderThickness="0"
+                                           MinWidth="0"
+                                           MinHeight="0"
+                                           AllowSpin="{TemplateBinding AllowSpin}"
+                                           ShowButtonSpinner="{TemplateBinding ShowButtonSpinner}"/>
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+
+        <!-- ButtonSpinner: two tiny stacked arrow buttons -->
+        <Style Selector="ButtonSpinner">
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Grid RowDefinitions="*,*" Width="16">
+                        <RepeatButton x:Name="PART_IncreaseButton"
+                                      Grid.Row="0"
+                                      Content="▲"
+                                      FontSize="7"
+                                      MinWidth="0"
+                                      MinHeight="0"
+                                      Padding="0"
+                                      HorizontalContentAlignment="Center"
+                                      VerticalContentAlignment="Center"
+                                      Background="#363636"
+                                      BorderBrush="#505050"
+                                      BorderThickness="0,0,0,1"
+                                      Foreground="#888888"/>
+                        <RepeatButton x:Name="PART_DecreaseButton"
+                                      Grid.Row="1"
+                                      Content="▼"
+                                      FontSize="7"
+                                      MinWidth="0"
+                                      MinHeight="0"
+                                      Padding="0"
+                                      HorizontalContentAlignment="Center"
+                                      VerticalContentAlignment="Center"
+                                      Background="#363636"
+                                      BorderBrush="Transparent"
+                                      BorderThickness="0"
+                                      Foreground="#888888"/>
+                    </Grid>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+
+        <!-- compact stroke ComboBoxes (3 stacked rows must fit the bar) -->
+        <Style Selector="Grid#FillStrokePanel ComboBox">
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="Padding" Value="5,0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <!-- compact mask ComboBox -->
+        <Style Selector="StackPanel#MaskPanel ComboBox">
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="Padding" Value="5,0"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <!-- compact bounding ComboBox + padding boxes -->
+        <Style Selector="StackPanel#BoundingPanel ComboBox">
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="Padding" Value="5,0"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="StackPanel#BoundingPaddingPanel NumericUpDown">
+            <Setter Property="FontSize" Value="10"/>
+        </Style>
+        <!-- transparent background not none: the label is a drag-to-scrub target and has to be hit-testable across its whole box -->
+        <Style Selector="StackPanel#BoundingPaddingPanel TextBlock.pad">
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Foreground" Value="#888888"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,3,0"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+
+        <!-- compact opacity slider -->
+        <Style Selector="Grid#OpacityPanel Slider">
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="Width" Value="90"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- compact anchor ComboBox (shares the opacity group's line budget) -->
+        <Style Selector="Grid#OpacityPanel ComboBox">
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="Padding" Value="5,0"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <!-- compact crop sliders -->
+        <Style Selector="Grid#CropPanel Slider">
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="Width" Value="76"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+    <!-- compact DataFlags checkboxes (3 stacked rows must fit the bar) -->
+    <Style Selector="StackPanel#DataFlagsPanel CheckBox">
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="Height" Value="16"/>
+        <Setter Property="FontSize" Value="10"/>
+        <Setter Property="Foreground" Value="#cccccc"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Grid ColumnDefinitions="12,*" Background="Transparent">
+                    <Border x:Name="CheckBorder"
+                            Grid.Column="0"
+                            Width="12" Height="12"
+                            Background="#2d2d2d"
+                            BorderBrush="#606060"
+                            BorderThickness="1"
+                            CornerRadius="2"
+                            VerticalAlignment="Center">
+                        <Panel>
+                            <Path x:Name="TickGlyph"
+                                  IsVisible="False"
+                                  Stretch="None"
+                                  Stroke="#dddddd"
+                                  StrokeThickness="1.4"
+                                  StrokeLineCap="Round"
+                                  StrokeJoin="Round"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"
+                                  Data="M 0,2.6 L 2.2,4.8 L 6,0.6"/>
+                            <!-- indeterminate: a dash, meaning the selection disagrees -->
+                            <Border x:Name="DashGlyph"
+                                    IsVisible="False"
+                                    Width="6" Height="2"
+                                    Background="#dddddd"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"/>
+                        </Panel>
+                    </Border>
+                    <ContentPresenter x:Name="PART_ContentPresenter"
+                                      Grid.Column="1"
+                                      Margin="5,0,0,0"
+                                      Content="{TemplateBinding Content}"
+                                      Foreground="{TemplateBinding Foreground}"
+                                      FontSize="{TemplateBinding FontSize}"
+                                      VerticalAlignment="Center"/>
+                </Grid>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="StackPanel#DataFlagsPanel CheckBox:checked /template/ Path#TickGlyph">
+        <Setter Property="IsVisible" Value="True"/>
+    </Style>
+    <Style Selector="StackPanel#DataFlagsPanel CheckBox:indeterminate /template/ Border#DashGlyph">
+        <Setter Property="IsVisible" Value="True"/>
+    </Style>
+    <Style Selector="StackPanel#DataFlagsPanel CheckBox:pointerover /template/ Border#CheckBorder">
+        <Setter Property="BorderBrush" Value="#8a8a8a"/>
+    </Style>
+    <Style Selector="StackPanel#DataFlagsPanel CheckBox:disabled">
+        <Setter Property="Opacity" Value="0.45"/>
+    </Style>
+
+    </UserControl.Styles>
+
+    <!-- fixed 80px: the bar must not grow or collapse as sections come and go -->
+    <Border Background="#1a1a1a"
+            BorderBrush="#333333"
+            BorderThickness="0,0,0,1"
+            MinHeight="80" MaxHeight="80">
+
+        <!-- columns [left sections][spacer][right sections]: the star spacer pushes crop/feather + opacity to the right edge while the window is wide enough, and collapses to zero once the bar overflows so the ScrollViewer takes over -->
+        <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Disabled">
+            <Grid ColumnDefinitions="Auto,*,Auto" Margin="6,4">
+
+                <StackPanel Grid.Column="0"
+                            Orientation="Horizontal" Spacing="0"
+                            VerticalAlignment="Center">
+
+                    <!-- position + size (any element) -->
+                    <StackPanel x:Name="PositionSizePanel"
+                                Orientation="Horizontal" Spacing="4"
+                                IsEnabled="False" VerticalAlignment="Center">
+
+                        <!-- XYZ vertical group -->
+                        <Grid ColumnDefinitions="12,66" RowDefinitions="Auto,Auto,Auto">
+
+                            <TextBlock x:Name="XLabel" Grid.Row="0" Grid.Column="0" Text="X"
+                                       VerticalAlignment="Center" FontSize="11"
+                                       Foreground="#888888" Margin="0,0,0,3"/>
+                            <NumericUpDown Grid.Row="0" Grid.Column="1" x:Name="XBox"
+                                           FormatString="F1" Minimum="-9999" Maximum="9999"
+                                           Increment="1" Margin="0,0,0,3"
+                                           ValueChanged="XBox_ValueChanged"/>
+
+                            <TextBlock x:Name="YLabel" Grid.Row="1" Grid.Column="0" Text="Y"
+                                       VerticalAlignment="Center" FontSize="11"
+                                       Foreground="#888888" Margin="0,0,0,3"/>
+                            <NumericUpDown Grid.Row="1" Grid.Column="1" x:Name="YBox"
+                                           FormatString="F1" Minimum="-9999" Maximum="9999"
+                                           Increment="1" Margin="0,0,0,3"
+                                           ValueChanged="YBox_ValueChanged"/>
+
+                            <TextBlock x:Name="ZLabel" Grid.Row="2" Grid.Column="0" Text="Z"
+                                       VerticalAlignment="Center" FontSize="11"
+                                       Foreground="#888888"/>
+                            <NumericUpDown Grid.Row="2" Grid.Column="1" x:Name="ZBox"
+                                           FormatString="F1" Minimum="-9999" Maximum="9999"
+                                           Increment="1" ValueChanged="ZBox_ValueChanged"/>
+
+                        </Grid>
+
+                        <Border Width="1" Background="#444444" Margin="3,0" VerticalAlignment="Stretch"/>
+
+                        <!-- rotation vertical group (degrees) -->
+                        <Grid ColumnDefinitions="18,66" RowDefinitions="Auto,Auto,Auto">
+
+                            <TextBlock x:Name="RxLabel" Grid.Row="0" Grid.Column="0" Text="RX"
+                                       VerticalAlignment="Center" FontSize="10"
+                                       Foreground="#888888" Margin="0,0,0,3"/>
+                            <NumericUpDown Grid.Row="0" Grid.Column="1" x:Name="RxBox"
+                                           FormatString="F1" Minimum="-360" Maximum="360"
+                                           Increment="1" Margin="0,0,0,3"
+                                           ValueChanged="RxBox_ValueChanged"/>
+
+                            <TextBlock x:Name="RyLabel" Grid.Row="1" Grid.Column="0" Text="RY"
+                                       VerticalAlignment="Center" FontSize="10"
+                                       Foreground="#888888" Margin="0,0,0,3"/>
+                            <NumericUpDown Grid.Row="1" Grid.Column="1" x:Name="RyBox"
+                                           FormatString="F1" Minimum="-360" Maximum="360"
+                                           Increment="1" Margin="0,0,0,3"
+                                           ValueChanged="RyBox_ValueChanged"/>
+
+                            <TextBlock x:Name="RzLabel" Grid.Row="2" Grid.Column="0" Text="RZ"
+                                       VerticalAlignment="Center" FontSize="10"
+                                       Foreground="#888888"/>
+                            <NumericUpDown Grid.Row="2" Grid.Column="1" x:Name="RzBox"
+                                           FormatString="F1" Minimum="-360" Maximum="360"
+                                           Increment="1" ValueChanged="RzBox_ValueChanged"/>
+
+                        </Grid>
+
+                        <Border Width="1" Background="#444444" Margin="3,0" VerticalAlignment="Stretch"/>
+
+                        <!-- WHD vertical group -->
+                        <Grid ColumnDefinitions="12,66" RowDefinitions="Auto,Auto,Auto">
+
+                            <TextBlock x:Name="WLabel" Grid.Row="0" Grid.Column="0" Text="W"
+                                       VerticalAlignment="Center" FontSize="11"
+                                       Foreground="#888888" Margin="0,0,0,3"/>
+                            <NumericUpDown Grid.Row="0" Grid.Column="1" x:Name="WBox"
+                                           FormatString="F1" Minimum="1" Maximum="9999"
+                                           Increment="1" Margin="0,0,0,3"
+                                           ValueChanged="WBox_ValueChanged"/>
+
+                            <TextBlock x:Name="HLabel" Grid.Row="1" Grid.Column="0" Text="H"
+                                       VerticalAlignment="Center" FontSize="11"
+                                       Foreground="#888888" Margin="0,0,0,3"/>
+                            <NumericUpDown Grid.Row="1" Grid.Column="1" x:Name="HBox"
+                                           FormatString="F1" Minimum="1" Maximum="9999"
+                                           Increment="1" Margin="0,0,0,3"
+                                           ValueChanged="HBox_ValueChanged"/>
+
+                            <TextBlock x:Name="DLabel" Grid.Row="2" Grid.Column="0" Text="D"
+                                       VerticalAlignment="Center" FontSize="11"
+                                       Foreground="#888888"/>
+                            <NumericUpDown Grid.Row="2" Grid.Column="1" x:Name="DBox"
+                                           FormatString="F1" Minimum="-9999" Maximum="9999"
+                                           Increment="1" ValueChanged="DBox_ValueChanged"/>
+
+                        </Grid>
+
+                        <Border Width="1" Background="#444444" Margin="3,0" VerticalAlignment="Stretch"/>
+
+                        <!-- align: one element aligns to the canvas, several to their own bounds -->
+                        <Grid ColumnDefinitions="24,24,24,8,24" RowDefinitions="24,24"
+                              VerticalAlignment="Center">
+
+                            <Button Grid.Row="0" Grid.Column="0" x:Name="AlignLeftButton"
+                                    Padding="0" Width="22" Height="22"
+                                    ToolTip.Tip="Align left edges  (Shift: align to canvas)"
+                                    Click="AlignLeftButton_Click">
+                                <Panel Width="14" Height="14">
+                                    <Path Fill="#cccccc" Stretch="None"
+                                          Data="M 0,0 L 1.5,0 L 1.5,14 L 0,14 Z M 3,2 L 13,2 L 13,6 L 3,6 Z M 3,8 L 9,8 L 9,12 L 3,12 Z"/>
+                                </Panel>
+                            </Button>
+
+                            <Button Grid.Row="0" Grid.Column="1" x:Name="AlignCenterHButton"
+                                    Padding="0" Width="22" Height="22"
+                                    ToolTip.Tip="Align horizontal centres  (Shift: align to canvas)"
+                                    Click="AlignCenterHButton_Click">
+                                <Panel Width="14" Height="14">
+                                    <Path Fill="#cccccc" Stretch="None"
+                                          Data="M 6.25,0 L 7.75,0 L 7.75,14 L 6.25,14 Z M 2,2 L 12,2 L 12,6 L 2,6 Z M 4,8 L 10,8 L 10,12 L 4,12 Z"/>
+                                </Panel>
+                            </Button>
+
+                            <Button Grid.Row="0" Grid.Column="2" x:Name="AlignRightButton"
+                                    Padding="0" Width="22" Height="22"
+                                    ToolTip.Tip="Align right edges  (Shift: align to canvas)"
+                                    Click="AlignRightButton_Click">
+                                <Panel Width="14" Height="14">
+                                    <Path Fill="#cccccc" Stretch="None"
+                                          Data="M 12.5,0 L 14,0 L 14,14 L 12.5,14 Z M 1,2 L 11,2 L 11,6 L 1,6 Z M 5,8 L 11,8 L 11,12 L 5,12 Z"/>
+                                </Panel>
+                            </Button>
+
+                            <Button Grid.Row="1" Grid.Column="0" x:Name="AlignTopButton"
+                                    Padding="0" Width="22" Height="22"
+                                    ToolTip.Tip="Align top edges  (Shift: align to canvas)"
+                                    Click="AlignTopButton_Click">
+                                <Panel Width="14" Height="14">
+                                    <Path Fill="#cccccc" Stretch="None"
+                                          Data="M 0,0 L 14,0 L 14,1.5 L 0,1.5 Z M 2,3 L 6,3 L 6,13 L 2,13 Z M 8,3 L 12,3 L 12,9 L 8,9 Z"/>
+                                </Panel>
+                            </Button>
+
+                            <Button Grid.Row="1" Grid.Column="1" x:Name="AlignMiddleButton"
+                                    Padding="0" Width="22" Height="22"
+                                    ToolTip.Tip="Align vertical centres  (Shift: align to canvas)"
+                                    Click="AlignMiddleButton_Click">
+                                <Panel Width="14" Height="14">
+                                    <Path Fill="#cccccc" Stretch="None"
+                                          Data="M 0,6.25 L 14,6.25 L 14,7.75 L 0,7.75 Z M 2,2 L 6,2 L 6,12 L 2,12 Z M 8,4 L 12,4 L 12,10 L 8,10 Z"/>
+                                </Panel>
+                            </Button>
+
+                            <Button Grid.Row="1" Grid.Column="2" x:Name="AlignBottomButton"
+                                    Padding="0" Width="22" Height="22"
+                                    ToolTip.Tip="Align bottom edges  (Shift: align to canvas)"
+                                    Click="AlignBottomButton_Click">
+                                <Panel Width="14" Height="14">
+                                    <Path Fill="#cccccc" Stretch="None"
+                                          Data="M 0,12.5 L 14,12.5 L 14,14 L 0,14 Z M 2,1 L 6,1 L 6,11 L 2,11 Z M 8,5 L 12,5 L 12,11 L 8,11 Z"/>
+                                </Panel>
+                            </Button>
+
+                            <Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="4"
+                                    x:Name="AlignCenterBothButton"
+                                    Padding="0" Width="22" Height="40"
+                                    ToolTip.Tip="Centre horizontally and vertically  (Shift: centre on canvas)"
+                                    Click="AlignCenterBothButton_Click">
+                                <Panel Width="14" Height="14">
+                                    <Path Fill="#cccccc" Stretch="None"
+                                          Data="M 6.25,0 L 7.75,0 L 7.75,14 L 6.25,14 Z M 0,6.25 L 14,6.25 L 14,7.75 L 0,7.75 Z"/>
+                                    <Path Fill="#cccccc" Stretch="None"
+                                          Data="M 4,4 L 10,4 L 10,10 L 4,10 Z"/>
+                                </Panel>
+                            </Button>
+
+                        </Grid>
+
+                    </StackPanel>
+
+                    <!-- fill + stroke (elements with colour) -->
+                    <!-- layout [FillSwatch Fill] | [ThicknessLabel+Box / StyleLabel+Box / CornersLabel+Box] | [StrokeSwatch Stroke], a two-row grid for stroke options -->
+                    <Grid x:Name="FillStrokePanel" IsVisible="False">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- col 0: leading separator + fill swatch -->
+                        <StackPanel Grid.Column="0"
+                                    Orientation="Horizontal" Spacing="0"
+                                    VerticalAlignment="Center">
+                            <Border Width="1" Background="#444444"
+                                    VerticalAlignment="Stretch" Margin="5,0"/>
+                            <StackPanel Orientation="Vertical" Spacing="1"
+                                        VerticalAlignment="Center" Margin="4,0">
+                                <Button x:Name="FillColorButton"
+                                        Width="32" Height="32" Padding="2"
+                                        ToolTip.Tip="Fill Color"
+                                        Click="FillColorButton_Click">
+                                    <Panel>
+                                        <Border CornerRadius="2" Background="#888888"/>
+                                        <Border x:Name="FillColorSwatch" CornerRadius="2"/>
+                                    </Panel>
+                                </Button>
+                                <TextBlock Text="Fill" FontSize="10"
+                                           Foreground="#888888"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- col 2: separator + stroke options, one column / three rows -->
+                        <StackPanel Grid.Column="2"
+                                    Orientation="Horizontal" Spacing="0"
+                                    VerticalAlignment="Center">
+                            <Border Width="1" Background="#444444"
+                                    VerticalAlignment="Stretch" Margin="5,0"/>
+
+                            <Grid ColumnDefinitions="Auto,100" RowDefinitions="Auto,Auto,Auto"
+                                  VerticalAlignment="Center">
+
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Thickness"
+                                           FontSize="11" Foreground="#888888"
+                                           VerticalAlignment="Center" Margin="0,0,4,3"/>
+                                <NumericUpDown Grid.Row="0" Grid.Column="1"
+                                               x:Name="StrokeThicknessBox"
+                                               FontSize="11" FormatString="F1"
+                                               Minimum="0" Maximum="99" Increment="1"
+                                               VerticalAlignment="Center" Margin="0,0,0,3"
+                                               ValueChanged="StrokeThicknessBox_ValueChanged"/>
+
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Style"
+                                           x:Name="StrokeStyleLabel"
+                                           FontSize="11" Foreground="#888888"
+                                           VerticalAlignment="Center" Margin="0,0,4,3"/>
+                                <ComboBox Grid.Row="1" Grid.Column="1"
+                                          x:Name="StrokeStyleBox"
+                                          FontSize="11" HorizontalAlignment="Stretch"
+                                          VerticalAlignment="Center" Margin="0,0,0,3"
+                                          SelectionChanged="StrokeStyleBox_SelectionChanged"/>
+
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Corners"
+                                           x:Name="CornersLabel"
+                                           FontSize="11" Foreground="#888888"
+                                           VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <ComboBox Grid.Row="2" Grid.Column="1"
+                                          x:Name="CornersBox"
+                                          FontSize="11" HorizontalAlignment="Stretch"
+                                          VerticalAlignment="Center"
+                                          SelectionChanged="CornersBox_SelectionChanged"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- col 1: stroke swatch + label -->
+                        <StackPanel Grid.Column="1"
+                                    Orientation="Horizontal" Spacing="0"
+                                    VerticalAlignment="Center">
+                            <Border Width="1" Background="#444444"
+                                    VerticalAlignment="Stretch" Margin="5,0"/>
+                            <StackPanel Orientation="Vertical" Spacing="1"
+                                        VerticalAlignment="Center" Margin="0,0,4,0">
+                                <Button x:Name="StrokeColorButton"
+                                        Width="32" Height="32" Padding="2"
+                                        ToolTip.Tip="Stroke Color"
+                                        Click="StrokeColorButton_Click">
+                                    <Panel>
+                                        <Border CornerRadius="2" Background="#888888"/>
+                                        <Border x:Name="StrokeColorSwatch" CornerRadius="2"/>
+                                    </Panel>
+                                </Button>
+                                <TextBlock Text="Stroke" FontSize="10"
+                                           Foreground="#888888"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                    </Grid>
+
+                    <!-- image source + size mode (GtImageElement only) -->
+                    <Grid x:Name="ImagePanel" IsVisible="False" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">
+                            <Border Width="1" Background="#444444"
+                                    VerticalAlignment="Stretch" Margin="5,0"/>
+
+                            <Grid ColumnDefinitions="Auto,150" RowDefinitions="Auto,Auto"
+                                  VerticalAlignment="Center">
+
+                                <Button Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
+                                        x:Name="ImageBrowseButton"
+                                        FontSize="11" Padding="8,2"
+                                        HorizontalAlignment="Left" Margin="0,0,0,3"
+                                        ToolTip.Tip="Replace this image's source file"
+                                        Content="Browse…"
+                                        Click="ImageBrowseButton_Click"/>
+
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Size Mode"
+                                           FontSize="11" Foreground="#888888"
+                                           VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <ComboBox Grid.Row="1" Grid.Column="1"
+                                          x:Name="ImageSizeModeBox"
+                                          FontSize="11" HorizontalAlignment="Stretch"
+                                          VerticalAlignment="Center"
+                                          SelectionChanged="ImageSizeModeBox_SelectionChanged"/>
+                            </Grid>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- ticker scroll properties (GtTickerElement only) -->
+                    <Grid x:Name="TickerPanel" IsVisible="False" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">
+                            <Border Width="1" Background="#444444"
+                                    VerticalAlignment="Stretch" Margin="5,0"/>
+
+                            <!-- Speed sits beside the two combos not under them: a third row does not fit the toolbar's height and gets clipped -->
+                            <Grid ColumnDefinitions="Auto,110,Auto,Auto" RowDefinitions="Auto,Auto"
+                                  VerticalAlignment="Center">
+
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Ticker"
+                                           FontSize="11" Foreground="#888888"
+                                           VerticalAlignment="Center" Margin="0,0,4,3"/>
+                                <ComboBox Grid.Row="0" Grid.Column="1"
+                                          x:Name="TickerTypeBox"
+                                          FontSize="11" HorizontalAlignment="Stretch"
+                                          VerticalAlignment="Center" Margin="0,0,0,3"
+                                          ToolTip.Tip="Replace loops the text forever; Add plays each update once"
+                                          SelectionChanged="TickerTypeBox_SelectionChanged"/>
+
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Direction"
+                                           FontSize="11" Foreground="#888888"
+                                           VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <ComboBox Grid.Row="1" Grid.Column="1"
+                                          x:Name="TickerDirectionBox"
+                                          FontSize="11" HorizontalAlignment="Stretch"
+                                          VerticalAlignment="Center"
+                                          ToolTip.Tip="Direction the content travels in"
+                                          SelectionChanged="TickerDirectionBox_SelectionChanged"/>
+
+                                <TextBlock Grid.Row="0" Grid.Column="2" Text="Speed"
+                                           x:Name="TickerSpeedLabel"
+                                           FontSize="11" Foreground="#888888"
+                                           VerticalAlignment="Center" Margin="8,0,4,3"
+                                           ToolTip.Tip="Drag to change; hold Alt for 0.1 steps"/>
+                                <NumericUpDown Grid.Row="0" Grid.Column="3"
+                                               x:Name="TickerSpeedBox"
+                                               Width="90"
+                                               FontSize="11" FormatString="F2"
+                                               Minimum="0" Maximum="999" Increment="0.5"
+                                               VerticalAlignment="Center" Margin="0,0,0,3"
+                                               ToolTip.Tip="Pixels per frame - the composition's frame rate sets the on-screen speed"
+                                               ValueChanged="TickerSpeedBox_ValueChanged"/>
+
+                                <!-- ticker preview transport: scrolls the tickers in place while the timeline is idle, at the same pixels-per-frame the storyboard preview and the video export use -->
+                                <StackPanel Grid.Row="1" Grid.Column="3"
+                                            Orientation="Horizontal" Spacing="2"
+                                            HorizontalAlignment="Left" VerticalAlignment="Center">
+                                    <Button x:Name="TickerPlayButton"
+                                            Padding="6,2" FontSize="11"
+                                            ToolTip.Tip="Play / pause the ticker scroll"
+                                            Click="TickerPlayButton_Click">
+                                        <Panel Width="10" Height="10">
+                                            <Path x:Name="TickerPlayGlyph" Fill="#cccccc" Stretch="None"
+                                                  Data="M 1,0 L 9,5 L 1,10 Z" />
+                                            <Path x:Name="TickerPauseGlyph" Fill="#cccccc" Stretch="None"
+                                                  IsVisible="False"
+                                                  Data="F1 M 1,0 L 4,0 L 4,10 L 1,10 Z M 6,0 L 9,0 L 9,10 L 6,10 Z" />
+                                        </Panel>
+                                    </Button>
+                                    <Button x:Name="TickerStopButton"
+                                            Padding="6,2" FontSize="11"
+                                            ToolTip.Tip="Stop and rewind the ticker scroll"
+                                            Click="TickerStopButton_Click">
+                                        <Panel Width="10" Height="10">
+                                            <Path Fill="#cccccc" Stretch="None"
+                                                  Data="M 1,1 L 9,1 L 9,9 L 1,9 Z" />
+                                        </Panel>
+                                    </Button>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- text-specific (GtTextBlock only) -->
+                    <!-- grid layout: col 0 = leading separator + text input (rowspan 2), col 1 = font family/size (row 0) | font weight + style buttons (row 1), col 2 = separator + alignment + wrap + spacing (rowspan 2, centred) -->
+                    <Grid x:Name="TextSpecificPanel" IsVisible="False">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- col 0: separator + text label + input (spans both rows) -->
+                        <StackPanel Grid.Column="0" Grid.RowSpan="2"
+                                    Orientation="Horizontal" Spacing="2"
+                                    VerticalAlignment="Center">
+                            <Border Width="1" Background="#444444"
+                                    VerticalAlignment="Stretch" Margin="5,0"/>
+                            <!-- hidden as a unit on a multi-selection: the box edits the primary only -->
+                            <StackPanel x:Name="TextInputGroup"
+                                        Orientation="Horizontal" Spacing="2"
+                                        VerticalAlignment="Center">
+                                <TextBlock Text="Text" VerticalAlignment="Center" FontSize="11"
+                                           Foreground="#888888" Margin="0,0,3,0"/>
+                                <TextBox x:Name="TextInputBox" Width="150" Height="60" FontSize="11"
+                                         AcceptsReturn="True" TextWrapping="Wrap"
+                                         VerticalAlignment="Center" VerticalContentAlignment="Top"
+                                         TextChanged="TextInputBox_TextChanged"/>
+                                <Border Width="1" Background="#444444"
+                                        VerticalAlignment="Stretch" Margin="5,0"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- col 1, row 0: font family + size -->
+                        <StackPanel Grid.Column="1" Grid.Row="0"
+                                    Orientation="Horizontal" Spacing="2"
+                                    VerticalAlignment="Center" Margin="0,0,0,2">
+                            <AutoCompleteBox x:Name="FontFamilyBox" Width="160" FontSize="11"
+                                             VerticalAlignment="Center" MaxDropDownHeight="300"
+                                             MinimumPrefixLength="0"
+                                             MinimumPopulateDelay="0"
+                                             FilterMode="Contains"/>
+                            <NumericUpDown x:Name="FontSizeBox" Width="60" FontSize="11"
+                                           FormatString="F1" Minimum="1" Maximum="999"
+                                           Increment="1" VerticalAlignment="Center"
+                                           Margin="3,0,0,0"
+                                           ValueChanged="FontSizeBox_ValueChanged"/>
+                        </StackPanel>
+
+                        <!-- col 1, row 1: font weight + style toggle buttons -->
+                        <StackPanel Grid.Column="1" Grid.Row="1"
+                                    Orientation="Horizontal" Spacing="2"
+                                    VerticalAlignment="Center">
+                            <ComboBox x:Name="FontWeightBox" Width="130" FontSize="11"
+                                      VerticalAlignment="Center"
+                                      SelectionChanged="FontWeightBox_SelectionChanged"/>
+                            <ToggleButton x:Name="ItalicButton"
+                                          Padding="7,2" VerticalAlignment="Center" Margin="3,0,0,0"
+                                          ToolTip.Tip="Italic" Click="ItalicButton_Click">
+                                <TextBlock Text="I" FontStyle="Italic" FontWeight="Bold" FontSize="13"/>
+                            </ToggleButton>
+                            <ToggleButton x:Name="UnderlineButton"
+                                          Padding="7,2" VerticalAlignment="Center"
+                                          ToolTip.Tip="Underline" Click="UnderlineButton_Click">
+                                <TextBlock Text="U" TextDecorations="Underline" FontWeight="Bold" FontSize="13"/>
+                            </ToggleButton>
+                            <ToggleButton x:Name="StrikeButton"
+                                          Padding="7,2" VerticalAlignment="Center"
+                                          ToolTip.Tip="Strikethrough" Click="StrikeButton_Click">
+                                <TextBlock Text="S" TextDecorations="Strikethrough" FontWeight="Bold" FontSize="13"/>
+                            </ToggleButton>
+                            <ToggleButton x:Name="UppercaseButton"
+                                          Padding="6,2" VerticalAlignment="Center"
+                                          ToolTip.Tip="Uppercase (TextEffect)" Click="UppercaseButton_Click">
+                                <TextBlock Text="AA" FontWeight="Bold" FontSize="11"/>
+                            </ToggleButton>
+                        </StackPanel>
+
+                        <!-- col 2: separator + alignment + wrap + spacing (spans both rows) -->
+                        <StackPanel Grid.Column="2" Grid.RowSpan="2"
+                                    Orientation="Horizontal" Spacing="2"
+                                    VerticalAlignment="Center">
+                            <Border Width="1" Background="#444444"
+                                    VerticalAlignment="Stretch" Margin="5,0"/>
+
+                            <Grid ColumnDefinitions="28,28,28" RowDefinitions="28,28">
+                                <ToggleButton x:Name="HAlignLeftButton"
+                                              Grid.Row="0" Grid.Column="0"
+                                              Width="28" Height="28" Padding="4" Margin="0,0,2,2"
+                                              ToolTip.Tip="Align Left" Click="HAlignLeft_Click">
+                                    <Image Source="avares://VmixGtPlus/Assets/Icons/align-left.png"/>
+                                </ToggleButton>
+                                <ToggleButton x:Name="HAlignCenterButton"
+                                              Grid.Row="0" Grid.Column="1"
+                                              Width="28" Height="28" Padding="4" Margin="0,0,2,2"
+                                              ToolTip.Tip="Align Center" Click="HAlignCenter_Click">
+                                    <Image Source="avares://VmixGtPlus/Assets/Icons/align-center.png"/>
+                                </ToggleButton>
+                                <ToggleButton x:Name="HAlignRightButton"
+                                              Grid.Row="0" Grid.Column="2"
+                                              Width="28" Height="28" Padding="4" Margin="0,0,0,2"
+                                              ToolTip.Tip="Align Right" Click="HAlignRight_Click">
+                                    <Image Source="avares://VmixGtPlus/Assets/Icons/align-right.png"/>
+                                </ToggleButton>
+                                <ToggleButton x:Name="VAlignTopButton"
+                                              Grid.Row="1" Grid.Column="0"
+                                              Width="28" Height="28" Padding="4" Margin="0,0,2,0"
+                                              ToolTip.Tip="Vertical Top" Click="VAlignTop_Click">
+                                    <Image Source="avares://VmixGtPlus/Assets/Icons/align-top.png"/>
+                                </ToggleButton>
+                                <ToggleButton x:Name="VAlignCenterButton"
+                                              Grid.Row="1" Grid.Column="1"
+                                              Width="28" Height="28" Padding="4" Margin="0,0,2,0"
+                                              ToolTip.Tip="Vertical Middle" Click="VAlignCenter_Click">
+                                    <Image Source="avares://VmixGtPlus/Assets/Icons/align-middle.png"/>
+                                </ToggleButton>
+                                <ToggleButton x:Name="VAlignBottomButton"
+                                              Grid.Row="1" Grid.Column="2"
+                                              Width="28" Height="28" Padding="4"
+                                              ToolTip.Tip="Vertical Bottom" Click="VAlignBottom_Click">
+                                    <Image Source="avares://VmixGtPlus/Assets/Icons/align-bottom.png"/>
+                                </ToggleButton>
+                            </Grid>
+
+                            <Border Width="1" Background="#444444"
+                                    VerticalAlignment="Stretch" Margin="5,0"/>
+
+                            <!-- wrap toggle with line spacing below it -->
+                            <StackPanel Orientation="Vertical" Spacing="3"
+                                        VerticalAlignment="Center" Margin="0,0,4,0">
+                                <ToggleButton x:Name="WordWrapButton"
+                                              Content="Wrap" FontSize="11"
+                                              Padding="7,2"
+                                              HorizontalAlignment="Stretch"
+                                              HorizontalContentAlignment="Center"
+                                              ToolTip.Tip="Word Wrap" Click="WordWrapButton_Click"/>
+
+                                <Grid ColumnDefinitions="Auto,66">
+                                    <TextBlock x:Name="SpacingLabel" Grid.Column="0" Text="Spacing"
+                                               VerticalAlignment="Center" FontSize="11"
+                                               Foreground="#888888" Margin="0,0,4,0"/>
+                                    <NumericUpDown Grid.Column="1" x:Name="SpacingBox"
+                                                   FormatString="F0" Minimum="1" Maximum="200"
+                                                   Increment="1" VerticalAlignment="Center"
+                                                   ToolTip.Tip="Line spacing %, a multiplier of the font line height. GT caps this at 200%."
+                                                   ValueChanged="SpacingBox_ValueChanged"/>
+                                </Grid>
+                            </StackPanel>
+
+                            <!-- auto-size: a Ticker forces its own, so the group hides for one -->
+                            <StackPanel x:Name="AutoSizePanel"
+                                        Orientation="Horizontal" Spacing="0"
+                                        VerticalAlignment="Center">
+                                <Border Width="1" Background="#444444"
+                                        VerticalAlignment="Stretch" Margin="5,0"/>
+                                <StackPanel Orientation="Vertical" Spacing="1"
+                                            VerticalAlignment="Center" Margin="0,0,4,0">
+                                    <ComboBox x:Name="AutoSizeBox"
+                                              Width="130" FontSize="11"
+                                              VerticalAlignment="Center"
+                                              ToolTip.Tip="Configure automatic Text Box resizing"
+                                              SelectionChanged="AutoSizeBox_SelectionChanged"/>
+                                    <TextBlock Text="Auto Size" FontSize="10"
+                                               Foreground="#888888"
+                                               HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
+
+                    </Grid>
+
+                </StackPanel>
+
+                <!-- pinned right -->
+                <StackPanel Grid.Column="2"
+                            Orientation="Horizontal" Spacing="0"
+                            VerticalAlignment="Center">
+
+                    <!-- mask + bounding (any element): both name a sibling of the selection so they share one column and the same same-layer rule, and padding belongs to the bounding row and sits beside it -->
+                    <StackPanel x:Name="ObjectRefPanel"
+                                Orientation="Horizontal" Spacing="0"
+                                IsVisible="False" VerticalAlignment="Center">
+
+                        <Border Width="1" Background="#444444"
+                                Margin="6,2" VerticalAlignment="Stretch"/>
+
+                        <StackPanel Orientation="Vertical" Spacing="3"
+                                    VerticalAlignment="Center" Margin="2,0">
+
+                            <StackPanel x:Name="MaskPanel"
+                                        Orientation="Horizontal" Spacing="4"
+                                        IsVisible="False" VerticalAlignment="Center">
+                                <TextBlock Text="Mask Object" Width="64" FontSize="10"
+                                           Foreground="#888888" TextAlignment="Right"
+                                           VerticalAlignment="Center"/>
+                                <ComboBox x:Name="MaskObjectBox"
+                                          Width="140"
+                                          ToolTip.Tip="Clip this element to another element in the same layer. vMix cannot mask across layers."
+                                          SelectionChanged="MaskObjectBox_SelectionChanged"/>
+                            </StackPanel>
+
+                            <StackPanel x:Name="BoundingPanel"
+                                        Orientation="Horizontal" Spacing="4"
+                                        IsVisible="False" VerticalAlignment="Center">
+                                <TextBlock Text="Bounding" Width="64" FontSize="10"
+                                           Foreground="#888888" TextAlignment="Right"
+                                           VerticalAlignment="Center"/>
+                                <ComboBox x:Name="BoundingObjectBox"
+                                          Width="140"
+                                          ToolTip.Tip="Follow another element in the same layer: this element takes that element's position and size, grown by the padding. Its own position and size become read-only."
+                                          SelectionChanged="BoundingObjectBox_SelectionChanged"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel x:Name="BoundingPaddingPanel"
+                                    Orientation="Vertical" Spacing="1"
+                                    IsVisible="False" VerticalAlignment="Center"
+                                    Margin="6,0,2,0">
+                            <Grid ColumnDefinitions="Auto,44,Auto,44" RowDefinitions="Auto,Auto">
+                                <TextBlock Grid.Row="0" Grid.Column="0" x:Name="PadLeftLabel"
+                                           Classes="pad" Text="Left"/>
+                                <NumericUpDown Grid.Row="0" Grid.Column="1" x:Name="PadLeftBox"
+                                               FormatString="F0" Minimum="-9999" Maximum="9999"
+                                               Increment="1" Margin="0,0,6,2"
+                                               ToolTip.Tip="Padding on the left edge - drag the label to scrub"
+                                               ValueChanged="PaddingBox_ValueChanged"/>
+                                <TextBlock Grid.Row="0" Grid.Column="2" x:Name="PadTopLabel"
+                                           Classes="pad" Text="Top"/>
+                                <NumericUpDown Grid.Row="0" Grid.Column="3" x:Name="PadTopBox"
+                                               FormatString="F0" Minimum="-9999" Maximum="9999"
+                                               Increment="1" Margin="0,0,0,2"
+                                               ToolTip.Tip="Padding on the top edge - drag the label to scrub"
+                                               ValueChanged="PaddingBox_ValueChanged"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" x:Name="PadRightLabel"
+                                           Classes="pad" Text="Right"/>
+                                <NumericUpDown Grid.Row="1" Grid.Column="1" x:Name="PadRightBox"
+                                               FormatString="F0" Minimum="-9999" Maximum="9999"
+                                               Increment="1" Margin="0,0,6,0"
+                                               ToolTip.Tip="Padding on the right edge - drag the label to scrub"
+                                               ValueChanged="PaddingBox_ValueChanged"/>
+                                <TextBlock Grid.Row="1" Grid.Column="2" x:Name="PadBottomLabel"
+                                           Classes="pad" Text="Bottom"/>
+                                <NumericUpDown Grid.Row="1" Grid.Column="3" x:Name="PadBottomBox"
+                                               FormatString="F0" Minimum="-9999" Maximum="9999"
+                                               Increment="1"
+                                               ToolTip.Tip="Padding on the bottom edge - drag the label to scrub"
+                                               ValueChanged="PaddingBox_ValueChanged"/>
+                            </Grid>
+                            <TextBlock Text="Padding" FontSize="10"
+                                       Foreground="#888888" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- DataFlags (any element), three-state: indeterminate means the selection disagrees -->
+                    <StackPanel x:Name="DataFlagsPanel"
+                                Orientation="Horizontal" Spacing="0"
+                                IsVisible="False" VerticalAlignment="Center">
+
+                        <Border Width="1" Background="#444444"
+                                Margin="6,2" VerticalAlignment="Stretch"/>
+
+                        <StackPanel Orientation="Vertical" Spacing="1"
+                                    VerticalAlignment="Center" Margin="2,0">
+                            <CheckBox x:Name="FlagHiddenCheck"
+                                      Content="Hidden"
+                                      IsThreeState="True"
+                                      ToolTip.Tip="Hidden from the vMix title editor"
+                                      Click="FlagHiddenCheck_Click"/>
+                            <CheckBox x:Name="FlagNoEventsCheck"
+                                      Content="Disable Events"
+                                      IsThreeState="True"
+                                      ToolTip.Tip="Element does not raise click / mouse events in vMix"
+                                      Click="FlagNoEventsCheck_Click"/>
+                            <CheckBox x:Name="FlagShowVisibleCheck"
+                                      Content="Show Visible Toggle"
+                                      IsThreeState="True"
+                                      ToolTip.Tip="Exposed in the vMix title editor with a visibility toggle"
+                                      Click="FlagShowVisibleCheck_Click"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- crop + feather (any element) -->
+                    <!-- crop and feather each collapse to one slider and expand independently into the four per-edge values the file format actually stores: crop row 0 = X0 / X1, row 1 = Y0 / Y1; feather row 0 = L / T, row 1 = R / B -->
+                    <Grid x:Name="CropPanel" IsVisible="False" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">
+                            <Border Width="1" Background="#444444"
+                                    VerticalAlignment="Stretch" Margin="5,0"/>
+
+                            <!-- vertical while both groups are collapsed, horizontal once either expands -->
+                            <StackPanel x:Name="CropFeatherStack"
+                                        Orientation="Vertical" Spacing="2"
+                                        VerticalAlignment="Center">
+
+                                <StackPanel Orientation="Horizontal" Spacing="0"
+                                            HorizontalAlignment="Left" VerticalAlignment="Center">
+
+                                    <StackPanel Orientation="Vertical" Spacing="1" VerticalAlignment="Center">
+
+                                        <Grid x:Name="CropCollapsedGrid"
+                                              ColumnDefinitions="Auto,Auto,52" RowDefinitions="Auto">
+
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Crop" Width="46"
+                                                       FontSize="11" Foreground="#888888"
+                                                       VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                            <Slider Grid.Row="0" Grid.Column="1" x:Name="CropAllSlider"
+                                                    Minimum="0" Maximum="50" Margin="0,0,4,0"/>
+                                            <NumericUpDown Grid.Row="0" Grid.Column="2" x:Name="CropAllBox"
+                                                           FontSize="11" FormatString="F0"
+                                                           Minimum="0" Maximum="50" Increment="1"
+                                                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        </Grid>
+
+                                        <Grid x:Name="CropExpandedGrid" IsVisible="False"
+                                              ColumnDefinitions="Auto,Auto,52,Auto,Auto,52" RowDefinitions="Auto,Auto">
+
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="X0"
+                                                       FontSize="11" Foreground="#888888"
+                                                       VerticalAlignment="Center" Margin="0,0,4,2"/>
+                                            <Slider Grid.Row="0" Grid.Column="1" x:Name="CropX0Slider"
+                                                    Minimum="0" Maximum="100" Margin="0,0,4,2"/>
+                                            <NumericUpDown Grid.Row="0" Grid.Column="2" x:Name="CropX0Box"
+                                                           FontSize="11" FormatString="F0"
+                                                           Minimum="0" Maximum="100" Increment="1"
+                                                           VerticalAlignment="Center" Margin="0,0,8,2"/>
+
+                                            <TextBlock Grid.Row="0" Grid.Column="3" Text="X1"
+                                                       FontSize="11" Foreground="#888888"
+                                                       VerticalAlignment="Center" Margin="0,0,4,2"/>
+                                            <Slider Grid.Row="0" Grid.Column="4" x:Name="CropX1Slider"
+                                                    Minimum="0" Maximum="100" Margin="0,0,4,2"/>
+                                            <NumericUpDown Grid.Row="0" Grid.Column="5" x:Name="CropX1Box"
+                                                           FontSize="11" FormatString="F0"
+                                                           Minimum="0" Maximum="100" Increment="1"
+                                                           VerticalAlignment="Center" Margin="0,0,8,2"/>
+
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Y0"
+                                                       FontSize="11" Foreground="#888888"
+                                                       VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                            <Slider Grid.Row="1" Grid.Column="1" x:Name="CropY0Slider"
+                                                    Minimum="0" Maximum="100" Margin="0,0,4,0"/>
+                                            <NumericUpDown Grid.Row="1" Grid.Column="2" x:Name="CropY0Box"
+                                                           FontSize="11" FormatString="F0"
+                                                           Minimum="0" Maximum="100" Increment="1"
+                                                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+
+                                            <TextBlock Grid.Row="1" Grid.Column="3" Text="Y1"
+                                                       FontSize="11" Foreground="#888888"
+                                                       VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                            <Slider Grid.Row="1" Grid.Column="4" x:Name="CropY1Slider"
+                                                    Minimum="0" Maximum="100" Margin="0,0,4,0"/>
+                                            <NumericUpDown Grid.Row="1" Grid.Column="5" x:Name="CropY1Box"
+                                                           FontSize="11" FormatString="F0"
+                                                           Minimum="0" Maximum="100" Increment="1"
+                                                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        </Grid>
+
+                                        <!-- only earns its line when the per-edge grid is showing -->
+                                        <TextBlock x:Name="CropCaption" Text="Crop" IsVisible="False"
+                                                   FontSize="10" Foreground="#888888"
+                                                   HorizontalAlignment="Center"/>
+                                    </StackPanel>
+
+                                <!-- side by side while collapsed, stacked once the per-edge grid opens -->
+                                <StackPanel x:Name="CropButtonStack"
+                                            Orientation="Horizontal" Spacing="2"
+                                            VerticalAlignment="Center" Margin="4,0,0,0">
+                                    <ToggleButton x:Name="CropExpandButton"
+                                                  Width="24" Height="24" Padding="4"
+                                                  MinWidth="0" MinHeight="0"
+                                                  ToolTip.Tip="Expand into the four stored crop edges (X0 / X1 / Y0 / Y1)"
+                                                  Click="CropExpandButton_Click">
+                                        <Border Background="#cccccc" Width="16" Height="16">
+                                            <Border.OpacityMask>
+                                                <ImageBrush Source="avares://VmixGtPlus/Assets/Icons/expand.png"
+                                                            Stretch="Uniform"/>
+                                            </Border.OpacityMask>
+                                        </Border>
+                                    </ToggleButton>
+                                    <Button x:Name="CropResetButton"
+                                            Width="24" Height="24" Padding="4"
+                                            MinWidth="0" MinHeight="0"
+                                            ToolTip.Tip="Reset the crop range"
+                                            Click="CropResetButton_Click">
+                                        <Border Background="#cccccc" Width="16" Height="16">
+                                            <Border.OpacityMask>
+                                                <ImageBrush Source="avares://VmixGtPlus/Assets/Icons/revert.png"
+                                                            Stretch="Uniform"/>
+                                            </Border.OpacityMask>
+                                        </Border>
+                                    </Button>
+                                </StackPanel>
+                                </StackPanel>
+
+                                <Border x:Name="CropFeatherSeparator" IsVisible="False"
+                                        Width="1" Background="#444444"
+                                        VerticalAlignment="Stretch" Margin="5,0"/>
+
+                                <StackPanel Orientation="Horizontal" Spacing="0"
+                                            HorizontalAlignment="Left" VerticalAlignment="Center">
+
+                                    <StackPanel Orientation="Vertical" Spacing="1" VerticalAlignment="Center">
+
+                                        <Grid x:Name="FeatherCollapsedGrid"
+                                              ColumnDefinitions="Auto,Auto,52" RowDefinitions="Auto">
+
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Feather" Width="46"
+                                                       FontSize="11" Foreground="#888888"
+                                                       VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                            <Slider Grid.Row="0" Grid.Column="1" x:Name="FeatherAllSlider"
+                                                    Minimum="0" Maximum="100" Margin="0,0,4,0"/>
+                                            <NumericUpDown Grid.Row="0" Grid.Column="2" x:Name="FeatherAllBox"
+                                                           FontSize="11" FormatString="F0"
+                                                           Minimum="0" Maximum="100" Increment="1"
+                                                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        </Grid>
+
+                                        <Grid x:Name="FeatherExpandedGrid" IsVisible="False"
+                                              ColumnDefinitions="Auto,Auto,52,Auto,Auto,52" RowDefinitions="Auto,Auto">
+
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="L"
+                                                       FontSize="11" Foreground="#888888"
+                                                       VerticalAlignment="Center" Margin="0,0,4,2"/>
+                                            <Slider Grid.Row="0" Grid.Column="1" x:Name="FeatherLeftSlider"
+                                                    Minimum="0" Maximum="100" Margin="0,0,4,2"/>
+                                            <NumericUpDown Grid.Row="0" Grid.Column="2" x:Name="FeatherLeftBox"
+                                                           FontSize="11" FormatString="F0"
+                                                           Minimum="0" Maximum="100" Increment="1"
+                                                           VerticalAlignment="Center" Margin="0,0,8,2"/>
+
+                                            <TextBlock Grid.Row="0" Grid.Column="3" Text="T"
+                                                       FontSize="11" Foreground="#888888"
+                                                       VerticalAlignment="Center" Margin="0,0,4,2"/>
+                                            <Slider Grid.Row="0" Grid.Column="4" x:Name="FeatherTopSlider"
+                                                    Minimum="0" Maximum="100" Margin="0,0,4,2"/>
+                                            <NumericUpDown Grid.Row="0" Grid.Column="5" x:Name="FeatherTopBox"
+                                                           FontSize="11" FormatString="F0"
+                                                           Minimum="0" Maximum="100" Increment="1"
+                                                           VerticalAlignment="Center" Margin="0,0,8,2"/>
+
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="R"
+                                                       FontSize="11" Foreground="#888888"
+                                                       VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                            <Slider Grid.Row="1" Grid.Column="1" x:Name="FeatherRightSlider"
+                                                    Minimum="0" Maximum="100" Margin="0,0,4,0"/>
+                                            <NumericUpDown Grid.Row="1" Grid.Column="2" x:Name="FeatherRightBox"
+                                                           FontSize="11" FormatString="F0"
+                                                           Minimum="0" Maximum="100" Increment="1"
+                                                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+
+                                            <TextBlock Grid.Row="1" Grid.Column="3" Text="B"
+                                                       FontSize="11" Foreground="#888888"
+                                                       VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                            <Slider Grid.Row="1" Grid.Column="4" x:Name="FeatherBottomSlider"
+                                                    Minimum="0" Maximum="100" Margin="0,0,4,0"/>
+                                            <NumericUpDown Grid.Row="1" Grid.Column="5" x:Name="FeatherBottomBox"
+                                                           FontSize="11" FormatString="F0"
+                                                           Minimum="0" Maximum="100" Increment="1"
+                                                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        </Grid>
+
+                                        <!-- only earns its line when the per-edge grid is showing -->
+                                        <TextBlock x:Name="FeatherCaption" Text="Feather" IsVisible="False"
+                                                   FontSize="10" Foreground="#888888"
+                                                   HorizontalAlignment="Center"/>
+                                    </StackPanel>
+
+                                <!-- side by side while collapsed, stacked once the per-edge grid opens -->
+                                <StackPanel x:Name="FeatherButtonStack"
+                                            Orientation="Horizontal" Spacing="2"
+                                            VerticalAlignment="Center" Margin="4,0,0,0">
+                                    <ToggleButton x:Name="FeatherExpandButton"
+                                                  Width="24" Height="24" Padding="4"
+                                                  MinWidth="0" MinHeight="0"
+                                                  ToolTip.Tip="Expand into the four stored feather edges (left / top / right / bottom)"
+                                                  Click="FeatherExpandButton_Click">
+                                        <Border Background="#cccccc" Width="16" Height="16">
+                                            <Border.OpacityMask>
+                                                <ImageBrush Source="avares://VmixGtPlus/Assets/Icons/expand.png"
+                                                            Stretch="Uniform"/>
+                                            </Border.OpacityMask>
+                                        </Border>
+                                    </ToggleButton>
+                                    <Button x:Name="FeatherResetButton"
+                                            Width="24" Height="24" Padding="4"
+                                            MinWidth="0" MinHeight="0"
+                                            ToolTip.Tip="Reset the feather widths"
+                                            Click="FeatherResetButton_Click">
+                                        <Border Background="#cccccc" Width="16" Height="16">
+                                            <Border.OpacityMask>
+                                                <ImageBrush Source="avares://VmixGtPlus/Assets/Icons/revert.png"
+                                                            Stretch="Uniform"/>
+                                            </Border.OpacityMask>
+                                        </Border>
+                                    </Button>
+                                </StackPanel>
+                                </StackPanel>
+
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- opacity (any element): model stores 0-1, the bar shows whole percent; Anchor rides underneath it, it decides which point of the box the X/Y boxes report and grow from and is what the file's Location measures -->
+                    <Grid x:Name="OpacityPanel" IsVisible="False" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">
+                            <Border Width="1" Background="#444444"
+                                    VerticalAlignment="Stretch" Margin="5,0"/>
+
+                            <StackPanel Orientation="Vertical" Spacing="1" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="4"
+                                            VerticalAlignment="Center" Margin="2,0">
+                                    <Slider x:Name="OpacitySlider"
+                                            Minimum="0" Maximum="100"
+                                            ToolTip.Tip="Element opacity (0-1 in the file)"/>
+                                    <NumericUpDown x:Name="OpacityBox" Width="52"
+                                                   FontSize="11" FormatString="F0"
+                                                   Minimum="0" Maximum="100" Increment="1"
+                                                   VerticalAlignment="Center"/>
+                                    <TextBlock Text="%" FontSize="11" Foreground="#888888"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock Text="Opacity" FontSize="10"
+                                           Foreground="#888888" HorizontalAlignment="Center"/>
+
+                                <StackPanel Orientation="Horizontal" Spacing="4"
+                                            VerticalAlignment="Center" Margin="2,0">
+                                    <TextBlock Text="Anchor" Width="40" FontSize="10"
+                                               Foreground="#888888" TextAlignment="Right"
+                                               VerticalAlignment="Center"/>
+                                    <ComboBox x:Name="AnchorBox" Width="110"
+                                              ToolTip.Tip="Which point of the box X/Y measure from - GT's own Anchor property, stored in the file. Switching it does not move the element: the X/Y readout changes to the new point, and W/H then grow away from it."
+                                              SelectionChanged="AnchorBox_SelectionChanged"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+
+                </StackPanel>
+
+            </Grid>
+        </ScrollViewer>
+
+    </Border>
+</UserControl>

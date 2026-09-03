@@ -1,0 +1,53 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="VmixGtPlus.Views.GuideEditWindow"
+        Title="Edit Guide"
+        Width="300" Height="185"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="#1a1a1a">
+
+    <StackPanel Margin="18" Spacing="12">
+
+        <TextBlock x:Name="HeaderText"
+                   Text="Horizontal guide"
+                   FontSize="13"
+                   FontWeight="SemiBold"
+                   Foreground="#eeeeee" />
+
+        <StackPanel Spacing="4">
+            <TextBlock x:Name="AxisLabel"
+                       Text="Y position (px)"
+                       FontSize="12"
+                       Foreground="#cccccc" />
+            <NumericUpDown x:Name="PositionBox"
+                           FormatString="F2"
+                           Minimum="-100000" Maximum="100000"
+                           Increment="1"
+                           FontSize="12" />
+        </StackPanel>
+
+        <TextBlock x:Name="RangeHint"
+                   FontSize="11"
+                   Foreground="#777777" />
+
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+            <Button Grid.Column="0"
+                    Content="Delete"
+                    Padding="12,5"
+                    Click="Delete_Click" />
+            <Button Grid.Column="2"
+                    Content="Cancel"
+                    Padding="12,5"
+                    Margin="0,0,8,0"
+                    Click="Cancel_Click" />
+            <Button Grid.Column="3"
+                    Content="OK"
+                    Padding="16,5"
+                    IsDefault="True"
+                    Click="Ok_Click" />
+        </Grid>
+
+    </StackPanel>
+</Window>

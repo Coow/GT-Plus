@@ -1,0 +1,139 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="VmixGtPlus.Views.GradientEditorWindow"
+        Title="Gradient Editor"
+        Width="420" Height="360"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="#1a1a1a">
+
+    <Grid Margin="12" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,*,Auto">
+
+        <!-- type -->
+        <ComboBox x:Name="TypeBox"
+                  Grid.Row="0"
+                  HorizontalAlignment="Stretch"
+                  Margin="0,0,0,10"
+                  SelectionChanged="TypeBox_SelectionChanged" />
+
+        <!-- angle -->
+        <Grid Grid.Row="1" ColumnDefinitions="60,*,64" Margin="0,0,0,8">
+            <TextBlock x:Name="AngleLabel"
+                       Grid.Column="0"
+                       Text="Angle"
+                       Foreground="#cccccc"
+                       FontSize="12"
+                       VerticalAlignment="Center" />
+            <Slider x:Name="AngleSlider"
+                    Grid.Column="1"
+                    Minimum="0" Maximum="360"
+                    VerticalAlignment="Center"
+                    ValueChanged="AngleSlider_ValueChanged" />
+            <NumericUpDown x:Name="AngleBox"
+                           Grid.Column="2"
+                           Minimum="0" Maximum="360"
+                           Increment="1"
+                           FormatString="0"
+                           ShowButtonSpinner="False"
+                           VerticalAlignment="Center"
+                           ValueChanged="AngleBox_ValueChanged" />
+        </Grid>
+
+        <!-- wrap -->
+        <Grid Grid.Row="2" ColumnDefinitions="60,*" Margin="0,0,0,10">
+            <TextBlock Grid.Column="0"
+                       Text="Wrap"
+                       Foreground="#cccccc"
+                       FontSize="12"
+                       VerticalAlignment="Center" />
+            <ComboBox x:Name="WrapBox"
+                      Grid.Column="1"
+                      HorizontalAlignment="Stretch"
+                      SelectionChanged="WrapBox_SelectionChanged" />
+        </Grid>
+
+        <Border Grid.Row="3" Height="1" Background="#333333" Margin="0,0,0,10" />
+
+        <!-- stop strip -->
+        <Panel x:Name="StopHost" Grid.Row="4" Height="34" Margin="0,0,0,10">
+            <Border Margin="6,4,6,4"
+                    BorderBrush="#484848" BorderThickness="1"
+                    Background="#888888" />
+            <Border x:Name="StripBorder"
+                    Margin="6,4,6,4"
+                    BorderBrush="#484848" BorderThickness="1" />
+            <Canvas x:Name="StopCanvas" Background="Transparent" />
+        </Panel>
+
+        <!-- color / position / apply -->
+        <Grid Grid.Row="5" ColumnDefinitions="60,*,28,10,90" RowDefinitions="Auto,6,Auto" Margin="0,0,0,10">
+            <TextBlock Grid.Row="0" Grid.Column="0"
+                       Text="Color"
+                       Foreground="#cccccc" FontSize="12"
+                       VerticalAlignment="Center" />
+            <Panel Grid.Row="0" Grid.Column="1">
+                <Border Background="#2d2d2d" BorderBrush="#484848" BorderThickness="1" />
+                <Grid ColumnDefinitions="26,*" Margin="1">
+                    <Border x:Name="StopColorSwatch" Grid.Column="0" Margin="2" />
+                    <TextBox x:Name="StopHexBox"
+                             Grid.Column="1"
+                             FontSize="11"
+                             FontFamily="Consolas,Courier New,monospace"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             Padding="2,1"
+                             VerticalAlignment="Center"
+                             KeyDown="StopHexBox_KeyDown"
+                             LostFocus="StopHexBox_LostFocus" />
+                </Grid>
+            </Panel>
+            <Button x:Name="PickColorButton"
+                    Grid.Row="0" Grid.Column="2"
+                    Content="..."
+                    Padding="0"
+                    HorizontalContentAlignment="Center"
+                    HorizontalAlignment="Stretch"
+                    Click="PickColorButton_Click" />
+
+            <TextBlock Grid.Row="2" Grid.Column="0"
+                       Text="Position"
+                       Foreground="#cccccc" FontSize="12"
+                       VerticalAlignment="Center" />
+            <NumericUpDown x:Name="PositionBox"
+                           Grid.Row="2" Grid.Column="1"
+                           Minimum="0" Maximum="1"
+                           Increment="0.01"
+                           FormatString="0.###"
+                           ShowButtonSpinner="False"
+                           ValueChanged="PositionBox_ValueChanged" />
+
+            <Button x:Name="ApplyButton"
+                    Grid.Row="0" Grid.RowSpan="3" Grid.Column="4"
+                    Content="Apply"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch"
+                    HorizontalContentAlignment="Center"
+                    VerticalContentAlignment="Center"
+                    Click="ApplyButton_Click" />
+        </Grid>
+
+        <!-- add / remove stop -->
+        <StackPanel Grid.Row="6" Orientation="Horizontal" Spacing="8">
+            <Button x:Name="AddStopButton" Content="Add Stop" Click="AddStopButton_Click" />
+            <Button x:Name="RemoveStopButton" Content="Remove Stop" Click="RemoveStopButton_Click" />
+        </StackPanel>
+
+        <!-- OK / cancel -->
+        <StackPanel Grid.Row="8" Orientation="Horizontal" Spacing="8"
+                    HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button Content="OK" Width="86"
+                    HorizontalContentAlignment="Center"
+                    Click="OkButton_Click" />
+            <Button Content="Cancel" Width="86"
+                    HorizontalContentAlignment="Center"
+                    Click="CancelButton_Click" />
+        </StackPanel>
+
+    </Grid>
+
+</Window>
