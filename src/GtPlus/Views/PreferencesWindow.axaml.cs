@@ -12,14 +12,17 @@ public partial class PreferencesWindow : Window
     private readonly PreferencesService _prefs;
     private readonly GtCanvasControl _canvas;
     private readonly Action<bool>? _onDebugToggled;
+    private readonly Action? _onCheckUpdates;
     private bool _suppressSlider;
 
-    public PreferencesWindow(PreferencesService prefs, GtCanvasControl canvas, Action<bool>? onDebugToggled = null)
+    public PreferencesWindow(PreferencesService prefs, GtCanvasControl canvas, Action<bool>? onDebugToggled = null,
+                             Action? onCheckUpdates = null)
     {
         InitializeComponent();
         _prefs           = prefs;
         _canvas          = canvas;
         _onDebugToggled  = onDebugToggled;
+        _onCheckUpdates  = onCheckUpdates;
 
         _suppressSlider          = true;
         TransparencySlider.Value = prefs.OutsideCanvasTransparency * 100;
@@ -36,6 +39,7 @@ public partial class PreferencesWindow : Window
         _suppressSlider     = false;
 
         DebugPanelCheck.IsChecked      = prefs.ShowDebugPanel;
+        StartupUpdateCheck.IsChecked   = prefs.CheckUpdatesOnStartup;
         AutoFitTimelineCheck.IsChecked = prefs.AutoFitOnTimelineOpen;
 
         _suppressSlider           = true;
@@ -104,6 +108,14 @@ public partial class PreferencesWindow : Window
         _prefs.AutoFitOnTimelineOpen = AutoFitTimelineCheck.IsChecked == true;
         _prefs.Save();
     }
+
+    private void StartupUpdateCheck_IsCheckedChanged(object? sender, RoutedEventArgs e)
+    {
+        _prefs.CheckUpdatesOnStartup = StartupUpdateCheck.IsChecked == true;
+        _prefs.Save();
+    }
+
+    private void CheckUpdates_Click(object? sender, RoutedEventArgs e) => _onCheckUpdates?.Invoke();
 
     private void Close_Click(object? sender, RoutedEventArgs e) => Close();
 }

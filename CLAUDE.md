@@ -44,6 +44,7 @@ Don't automatically commit to git
   function of the frame number (`Simulate`) or laid out flush at rest (`Rest`)
 - **`FfmpegService.cs`** - locates the ffmpeg binary (prefs path → app dir → PATH → usual install dirs); can download the official Windows build into `%APPDATA%/GtPlus/ffmpeg`
 - **`VideoExportService.cs`** - MP4 export. Drives `GtCanvasControl.AnimationFrame` + `ExportToBitmap()` one frame at a time on the UI thread and pipes raw BGRA into ffmpeg's stdin via a bounded background writer
+- **`UpdateService.cs`** - `AppVersion.Current` (from the linked version.json resource) plus the GitHub `releases/latest` check and dotted-numeric version compare. Never downloads anything - a newer release only opens the release page
 - **`Logger.cs`** - static logger
 
 ### Controls - `src/GtPlus/Controls/`
@@ -74,7 +75,8 @@ Don't automatically commit to git
   - `OnKeyDown`: S=Select, E=Edit, Ctrl+Z=Undo, Ctrl+Y=Redo, Ctrl+S=Save, Ctrl+Shift+S=SaveAs
   - Middle-click drag = pan canvas; Ctrl+scroll = zoom
 - **`ExportVideoWindow.axaml/.cs`** - MP4 export dialog: storyboard (single, or the TransitionIn+TransitionOut pair), hold seconds, fps, quality, background, output path
-- **`PreferencesWindow.axaml/.cs`** - preferences dialog (outside canvas opacity, debug panel toggle)
+- **`PreferencesWindow.axaml/.cs`** - preferences dialog (outside canvas opacity, debug panel toggle, update check on startup)
+- **`UpdateWindow.axaml/.cs`** - update check result: version numbers, release notes, "Open Download Page" / "Skip This Version". Opened from File > Check for Updates, and at startup only when a newer, non-skipped release exists
 
 ---
 

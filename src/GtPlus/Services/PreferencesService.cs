@@ -42,6 +42,9 @@ public class PreferencesService
     /// <summary>document pixels an arrow key moves the selection while Shift is held; a bare arrow key always moves by 1</summary>
     public double NudgeLargeStep { get; set; } = 10;
 
+    public bool CheckUpdatesOnStartup { get; set; } = true;
+    public string SkippedUpdateVersion { get; set; } = "";
+
     /// <summary>remembered ffmpeg binary, empty means "search the usual places"</summary>
     public string FfmpegPath { get; set; } = "";
 
@@ -81,6 +84,8 @@ public class PreferencesService
                 SnapToCanvas              = data.SnapToCanvas;
                 SnapDistance              = Math.Clamp(data.SnapDistance, 1, 64);
                 NudgeLargeStep            = Math.Clamp(data.NudgeLargeStep, 1, 1000);
+                CheckUpdatesOnStartup = data.CheckUpdatesOnStartup;
+                SkippedUpdateVersion  = data.SkippedUpdateVersion ?? "";
                 FfmpegPath        = data.FfmpegPath ?? "";
                 ExportFps         = data.ExportFps > 0 ? data.ExportFps : 30;
                 ExportHoldSeconds = Math.Clamp(data.ExportHoldSeconds, 0, 3600);
@@ -115,6 +120,8 @@ public class PreferencesService
                 SnapToCanvas              = SnapToCanvas,
                 SnapDistance              = SnapDistance,
                 NudgeLargeStep            = NudgeLargeStep,
+                CheckUpdatesOnStartup = CheckUpdatesOnStartup,
+                SkippedUpdateVersion  = SkippedUpdateVersion,
                 FfmpegPath        = FfmpegPath,
                 ExportFps         = ExportFps,
                 ExportHoldSeconds = ExportHoldSeconds,
@@ -145,6 +152,8 @@ public class PreferencesService
         public bool   SnapToCanvas              { get; set; } = true;
         public double SnapDistance              { get; set; } = 8;
         public double NudgeLargeStep            { get; set; } = 10;
+        public bool   CheckUpdatesOnStartup      { get; set; } = true;
+        public string SkippedUpdateVersion       { get; set; } = "";
         public string FfmpegPath                { get; set; } = "";
         public int    ExportFps                 { get; set; } = 30;
         public double ExportHoldSeconds         { get; set; } = 3;

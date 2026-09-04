@@ -1,0 +1,80 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="GtPlus.Views.UpdateWindow"
+        Title="Check for Updates"
+        Width="460" Height="420"
+        MinWidth="380" MinHeight="260"
+        CanResize="True"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="#1a1a1a">
+
+    <DockPanel Margin="20">
+
+        <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,12">
+            <TextBlock x:Name="HeadlineText"
+                       Text="Checking for updates..."
+                       FontSize="15"
+                       FontWeight="SemiBold"
+                       Foreground="#eeeeee"
+                       TextWrapping="Wrap" />
+
+            <TextBlock x:Name="VersionsText"
+                       Text=""
+                       FontSize="12"
+                       Foreground="#999999"
+                       TextWrapping="Wrap" />
+        </StackPanel>
+
+        <!-- footer: the startup toggle sits beside the actions so both are visible without scrolling -->
+        <Grid DockPanel.Dock="Bottom"
+              ColumnDefinitions="*,Auto"
+              Margin="0,14,0,0">
+
+            <CheckBox Grid.Column="0"
+                      x:Name="StartupCheck"
+                      Content="Check on startup"
+                      Foreground="#cccccc"
+                      FontSize="12"
+                      VerticalAlignment="Center"
+                      IsCheckedChanged="StartupCheck_IsCheckedChanged" />
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <Button x:Name="SkipButton"
+                        Content="Skip This Version"
+                        Padding="12,6"
+                        IsVisible="False"
+                        Click="Skip_Click" />
+
+                <Button x:Name="DownloadButton"
+                        Content="Open Download Page"
+                        Padding="12,6"
+                        IsVisible="False"
+                        Click="Download_Click" />
+
+                <Button x:Name="CloseButton"
+                        Content="Close"
+                        Padding="18,6"
+                        IsDefault="True"
+                        Click="Close_Click" />
+            </StackPanel>
+        </Grid>
+
+        <Border x:Name="NotesBorder"
+                BorderBrush="#333333"
+                BorderThickness="1"
+                CornerRadius="3"
+                Padding="10"
+                IsVisible="False">
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+                <SelectableTextBlock x:Name="NotesText"
+                                     Text=""
+                                     FontSize="12"
+                                     Foreground="#cccccc"
+                                     TextWrapping="Wrap" />
+            </ScrollViewer>
+        </Border>
+
+    </DockPanel>
+</Window>

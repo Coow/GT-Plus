@@ -50,6 +50,9 @@ public partial class MainWindow : Window
     // data source verifier window
     private DataSourceVerifierWindow? _dataVerifierWindow;
 
+    // update check window
+    private UpdateWindow? _updateWindow;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -158,6 +161,33 @@ public partial class MainWindow : Window
         base.OnOpened(e);
         RestoreWindowGeometry();
         FitToWindow();
+
+        if (_prefs.CheckUpdatesOnStartup) _ = CheckForUpdatesAtStartup();
+    }
+
+    /// <summary>silent check: the window only appears when a newer release exists and it is not the one the user skipped</summary>
+    private async System.Threading.Tasks.Task CheckForUpdatesAtStartup()
+    {
+        var result = await new UpdateService().CheckAsync();
+
+        if (!result.Success || !result.IsNewer || result.Latest is null) return;
+        if (string.Equals(result.Latest.Version, _prefs.SkippedUpdateVersion, StringComparison.OrdinalIgnoreCase)) return;
+
+        ShowUpdateWindow(result);
+    }
+
+    /// <summary>pass a finished check to show its result, or null to have the window run one itself</summary>
+    private void ShowUpdateWindow(UpdateCheckResult? result = null)
+    {
+        if (_updateWindow is not null)
+        {
+            _updateWindow.Activate();
+            return;
+        }
+
+        _updateWindow = new UpdateWindow(_prefs, result);
+        _updateWindow.Closed += (_, _) => _updateWindow = null;
+        _updateWindow.Show(this);
     }
 
     protected override void OnClosing(WindowClosingEventArgs e)
@@ -1016,7 +1046,7 @@ public partial class MainWindow : Window
         {
             DebugPanel.IsVisible = isOn;
             UpdateDebugPanel();
-        });
+        }, () => ShowUpdateWindow());
         _prefsWindow.Closed += (_, _) => _prefsWindow = null;
         _prefsWindow.Show(this);
     }
@@ -1301,6 +1331,11 @@ public partial class MainWindow : Window
         var about = new MenuItem { Header = "_About" };
         about.Click += About_Click;
         FileMenu.Items.Add(about);
+
+        var updates = new MenuItem { Header = "Check for _Updates..." };
+        ToolTip.SetTip(updates, "Look for a newer release on GitHub. Nothing is downloaded automatically.");
+        updates.Click += (_, _) => ShowUpdateWindow();
+        FileMenu.Items.Add(updates);
 
         var exit = new MenuItem { Header = "E_xit" };
         exit.Click += Exit_Click;

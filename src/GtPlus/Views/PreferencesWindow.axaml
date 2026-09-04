@@ -209,6 +209,35 @@
 
         <Border Height="1" Background="#333333" />
 
+        <!-- updates section -->
+        <StackPanel Spacing="8">
+            <TextBlock Text="UPDATES"
+                       FontSize="10"
+                       FontWeight="SemiBold"
+                       Foreground="#888888" />
+
+            <StackPanel Spacing="4">
+                <CheckBox x:Name="StartupUpdateCheck"
+                          Content="Check for Updates on Startup"
+                          Foreground="#cccccc"
+                          FontSize="12"
+                          IsCheckedChanged="StartupUpdateCheck_IsCheckedChanged" />
+
+                <TextBlock Text="Asks GitHub whether a newer release exists and says so only when there is one. Updates are never downloaded or installed automatically."
+                           Foreground="#777777"
+                           FontSize="11"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+
+            <Button x:Name="CheckUpdatesButton"
+                    Content="Check for Updates Now"
+                    Padding="12,5"
+                    HorizontalAlignment="Left"
+                    Click="CheckUpdates_Click" />
+        </StackPanel>
+
+        <Border Height="1" Background="#333333" />
+
         <!-- developer section -->
         <StackPanel Spacing="8">
             <TextBlock Text="DEVELOPER"
