@@ -326,9 +326,19 @@ public partial class TimelinePanelControl : UserControl
 
     private void HoldBox_KeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Enter) return;
-        CommitHold();
+        if (e.Key == Key.Enter)
+        {
+            CommitHold();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key != Key.Escape) return;
+
+        using (SuppressEvents())
+            HoldBox.Text = _hold.ToString("0.##", CultureInfo.InvariantCulture);
         e.Handled = true;
+        TopLevel.GetTopLevel(this)?.FocusManager?.Focus(null);
     }
 
     /// <summary>re-places the TransitionOut segment; the hold is preview state (how long the template stays live before vMix plays the out half) so it never touches the document</summary>
@@ -1066,9 +1076,20 @@ public partial class TimelinePanelControl : UserControl
 
     private void TimingBox_KeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Enter || _selected is null) return;
-        CommitPropertyStrip();
+        if (_selected is null) return;
+
+        if (e.Key == Key.Enter)
+        {
+            CommitPropertyStrip();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key != Key.Escape) return;
+
+        LoadPropertyStrip(_selected);
         e.Handled = true;
+        TopLevel.GetTopLevel(this)?.FocusManager?.Focus(null);
     }
 
     /// <summary>applies every field of the strip as one undoable edit; reading all fields at once keeps a single history entry per user action instead of one per control, and with several clips selected only the fields the user actually changed are copied across (the untouched ones keep each clip's own value) so editing the easing of a group does not flatten their delays onto one another</summary>

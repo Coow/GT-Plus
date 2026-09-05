@@ -822,14 +822,27 @@ public partial class PropertiesPanelControl : UserControl
         PushHistory("Text content", () => tb.Text = before, () => tb.Text = after);
     }
 
-    /// <summary>Enter commits and drops focus, Shift+Enter inserts the newline, Escape acts like Enter</summary>
+    /// <summary>Enter commits and drops focus, Shift+Enter inserts the newline, Escape discards the edit and puts back the text the box held when it took focus</summary>
     private void TextInputBox_KeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key != Key.Enter && e.Key != Key.Escape) return;
         if (e.Key == Key.Enter && e.KeyModifiers.HasFlag(KeyModifiers.Shift)) return;
 
         e.Handled = true;
+        if (e.Key == Key.Escape) DiscardTextEdit();
         TopLevel.GetTopLevel(this)?.FocusManager?.Focus(null);
+    }
+
+    private void DiscardTextEdit()
+    {
+        var typed = TextInputBox.Text ?? "";
+        if (CurrentText is null || typed == _textBefore) return;
+
+        var tb     = CurrentText;
+        var before = _textBefore;
+        TextInputBox.Text = before;   // TextChanged writes it back to the element
+        PushHistory("Discard text content", () => tb.Text = typed, () => tb.Text = before);
+        Apply();
     }
 
     private void TextInputBox_TextChanged(object? sender, TextChangedEventArgs e)
@@ -1362,6 +1375,40 @@ public partial class PropertiesPanelControl : UserControl
         };
 
         nud.ValueChanged += (_, e) => { if (_updating) keyboardBefore = e.NewValue ?? 0m; };
+
+        nud.AddHandler(KeyDownEvent, (object? s, KeyEventArgs e) =>
+        {
+            if (e.Key != Key.Escape) return;
+            e.Handled = true;
+
+            var after  = nud.Value ?? 0m;
+            var before = keyboardBefore;
+            var snap   = kbSnapshot;
+            var el     = _currentElement;
+            kbSnapshot = null;
+
+            if (after != before && el is not null)
+            {
+                Action discard = snap != null ? MakeUndo(snap)                  : () => setter(el, before);
+                Action restore = snap != null ? MakeRedo(snap, before, after)   : () => setter(el, after);
+                discard();
+                History?.Push(new PropertyChangeAction($"Discard {description}", restore, discard));
+            }
+
+            // the model is already back where it belongs, so only the box display is left
+            _updating = true;
+            try { nud.Value = before; }
+            finally { _updating = false; }
+            keyboardBefore = before;
+
+            if (after != before && el is not null)
+            {
+                RefreshCropControls();   // crop/feather/opacity boxes share a slider that must follow
+                Apply();
+            }
+
+            TopLevel.GetTopLevel(this)?.FocusManager?.Focus(null);
+        }, RoutingStrategies.Tunnel);
 
         nud.LostFocus += (_, _) =>
         {

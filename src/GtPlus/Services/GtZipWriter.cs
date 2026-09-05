@@ -370,10 +370,10 @@ public class GtZipWriter
         _                            => "Solid"
     };
 
-    /// <summary>renders the set flags as vMix's comma-separated list, or null when none are set so the caller can leave the attribute off the element</summary>
-    private static string? DataFlagsText(GtDataFlags flags)
+    /// <summary>renders the set flags as vMix's comma-separated list; no flag set writes the literal "None", the same spelling GT Title uses</summary>
+    private static string DataFlagsText(GtDataFlags flags)
     {
-        if (flags == GtDataFlags.None) return null;
+        if (flags == GtDataFlags.None) return "None";
 
         var parts = new List<string>(3);
         if (flags.HasFlag(GtDataFlags.Hidden))      parts.Add("Hidden");
@@ -393,13 +393,8 @@ public class GtZipWriter
         el.Add(new XAttribute("Visible",    Bool(src.Visible)));
         el.Add(new XAttribute("Opacity",    Fmt(src.Opacity)));
         el.Add(new XAttribute("Locked",     Bool(src.Locked)));
-        // flags that are off are simply absent, vMix omits the attribute entirely when no flag is set so an untouched element round-trips unchanged; a shape whose only flag is Hidden writes nothing either, for a Rectangle / Ellipse the missing attribute (GT Title's "None") already means hidden and the reader restores the flag
-        var flags = src is GtRectangleElement or GtEllipseElement && src.DataFlags == GtDataFlags.Hidden
-            ? GtDataFlags.None
-            : src.DataFlags;
-        var dataFlags = DataFlagsText(flags);
-        if (dataFlags is not null)
-            el.Add(new XAttribute("DataFlags", dataFlags));
+        // flags that are off are simply absent from the list; with nothing set the attribute still goes out as "None", matching GT Title
+        el.Add(new XAttribute("DataFlags", DataFlagsText(src.DataFlags)));
 
         if (src.RotateX != 0 || src.RotateY != 0 || src.RotateZ != 0)
             el.Add(new XElement(typeName + ".Transform",

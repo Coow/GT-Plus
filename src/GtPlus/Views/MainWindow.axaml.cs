@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using Avalonia;
 using Avalonia.Controls;
@@ -130,6 +131,11 @@ public partial class MainWindow : Window
         GtCanvas.PointerExited += (_, _) => SetRulerPointer(null);
 
         ApplyRulerPreferences();
+
+        // dropping image files onto the canvas area adds them as image elements; AllowDrop is inherited so the scroll viewer covers the canvas and its surround
+        DragDrop.SetAllowDrop(CanvasScrollViewer, true);
+        CanvasScrollViewer.AddHandler(DragDrop.DragOverEvent, OnCanvasDragOver);
+        CanvasScrollViewer.AddHandler(DragDrop.DropEvent,     OnCanvasDrop);
 
         // tunnel so we intercept before ScrollViewer's own handlers run
         CanvasScrollViewer.AddHandler(PointerWheelChangedEvent,  OnScrollViewerWheel,    RoutingStrategies.Tunnel);
@@ -727,7 +733,7 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 break;
             case Key.V when e.KeyModifiers == KeyModifiers.Control && e.Source is not TextBox:
-                DoPaste();
+                _ = DoPasteAsync();
                 e.Handled = true;
                 break;
             case Key.D when e.KeyModifiers == KeyModifiers.Control && e.Source is not TextBox:
@@ -782,7 +788,7 @@ public partial class MainWindow : Window
                 ToggleLockGuides_Click(this, new RoutedEventArgs());
                 e.Handled = true;
                 break;
-            // Enter in a single-line box commits by dropping focus (boxes commit on LostFocus)
+            // Enter in a single-line box commits by dropping focus (boxes commit on LostFocus).
             case Key.Enter when e.Source is TextBox { AcceptsReturn: false }:
             case Key.Escape when e.Source is TextBox:
                 TopLevel.GetTopLevel(this)?.FocusManager?.Focus(null);
@@ -1704,8 +1710,6 @@ public partial class MainWindow : Window
                 Location   = new GtPoint(docRect.X - layer.Location.X, docRect.Y - layer.Location.Y),
                 Dimensions = new GtSize(docRect.Width, docRect.Height),
                 Fill       = new GtBrush { Type = GtBrushType.Solid, Color = Avalonia.Media.Colors.Red },
-                // GT Title draws a shape with DataFlags "None", which vMix reads as hidden
-                DataFlags  = GtDataFlags.Hidden,
             };
         }
 
@@ -1779,7 +1783,90 @@ public partial class MainWindow : Window
     private readonly List<ClipboardEntry> _clipboard = new();
 
     private void Copy_Click(object? sender, RoutedEventArgs e) => DoCopy();
-    private void Paste_Click(object? sender, RoutedEventArgs e) => DoPaste();
+    private void Paste_Click(object? sender, RoutedEventArgs e) => _ = DoPasteAsync();
+
+    /// <summary>Windows bumps this every time anything is put on the clipboard, so it tells us whether the system clipboard was written after our last in-app copy; 0 everywhere else, which leaves the in-app clipboard in charge</summary>
+    [DllImport("user32.dll")] private static extern uint GetClipboardSequenceNumber();
+
+    private static uint ClipboardSequence()
+    {
+        if (!OperatingSystem.IsWindows()) return 0;
+        try   { return GetClipboardSequenceNumber(); }
+        catch { return 0; }
+    }
+
+    /// <summary>clipboard sequence number when the in-app clipboard was last filled</summary>
+    private uint _clipboardSequence;
+
+    /// <summary>Ctrl+V: an image copied outside GT++ since the last in-app copy wins, otherwise the copied elements do; that keeps "copy element, paste element" exact while still letting a screenshot land on the canvas</summary>
+    private async System.Threading.Tasks.Task DoPasteAsync()
+    {
+        if (GtCanvas.Document is null) return;
+
+        if (_clipboard.Count == 0 || ClipboardSequence() != _clipboardSequence)
+            if (await TryPasteClipboardImagesAsync()) return;
+
+        DoPaste();
+    }
+
+    /// <summary>adds whatever image the system clipboard holds - image files copied in a file manager keep their own encoding, a raw bitmap (screenshot, browser copy) is re-encoded as PNG; returns false when the clipboard holds no image</summary>
+    private async System.Threading.Tasks.Task<bool> TryPasteClipboardImagesAsync()
+    {
+        var clipboard = Clipboard;
+        if (clipboard is null) return false;
+
+        try
+        {
+            using var data = await clipboard.TryGetDataAsync();
+            if (data is null) return false;
+
+            var paths = ImageFilePaths(await data.TryGetFilesAsync());
+            if (paths.Count > 0)
+            {
+                int added = 0;
+                for (int i = 0; i < paths.Count; i++)
+                {
+                    // cascade like a multi-file drop so several pasted files do not sit exactly on top of each other
+                    var offset = i == 0 ? (Point?)null : PasteOffsetPoint(i);
+                    if (AddImageFromFile(paths[i], offset) is not null) added++;
+                }
+
+                if (added == 0) return false;
+                StatusText.Text = added == 1
+                    ? $"Pasted {Path.GetFileName(paths[0])}"
+                    : $"Pasted {added} images";
+                return true;
+            }
+
+            if (await data.TryGetBitmapAsync() is { } bitmap)
+            {
+                using var ms = new MemoryStream();
+                bitmap.Save(ms);
+                if (AddImageFromBytes(ms.ToArray(), "png", "Clipboard", null) is null) return false;
+
+                StatusText.Text = "Pasted clipboard image";
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Failed to paste image from clipboard", ex);
+            StatusText.Text = $"Clipboard error: {ex.Message}";
+        }
+
+        return false;
+    }
+
+    /// <summary>doc-space centre nudged by <paramref name="index"/> steps, used to fan out a multi-image paste</summary>
+    private Point PasteOffsetPoint(int index)
+    {
+        var doc = GtCanvas.Document!;
+        return new Point(doc.Width / 2 + index * 20.0, doc.Height / 2 + index * 20.0);
+    }
+
+    /// <summary>Paste stays available whenever a document is open: even with nothing copied in-app the clipboard may hold an image</summary>
+    private void EditMenu_SubmenuOpened(object? sender, RoutedEventArgs e)
+        => PasteMenuItem.IsEnabled = _clipboard.Count > 0 || GtCanvas.Document is not null;
 
     private void DoCopy()
     {
@@ -1806,6 +1893,7 @@ public partial class MainWindow : Window
                 _clipboard.Add(entry);
             }
 
+        _clipboardSequence = ClipboardSequence();
         PasteMenuItem.IsEnabled = _clipboard.Count > 0;
         StatusText.Text = $"Copied {_clipboard.Count} element(s)";
     }
@@ -2068,18 +2156,108 @@ public partial class MainWindow : Window
         return files.Count == 0 ? null : files[0].TryGetLocalPath();
     }
 
+    private static readonly string[] ImageFileExtensions =
+        { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".dds" };
+
+    /// <summary>local paths of the storage items we can turn into image elements, in the order the platform handed them over</summary>
+    private static List<string> ImageFilePaths(IEnumerable<IStorageItem>? files)
+    {
+        var result = new List<string>();
+        if (files is null) return result;
+
+        foreach (var file in files)
+        {
+            var path = file.TryGetLocalPath();
+            if (path is null) continue;
+            if (Array.IndexOf(ImageFileExtensions, Path.GetExtension(path).ToLowerInvariant()) >= 0)
+                result.Add(path);
+        }
+
+        return result;
+    }
+
+    private static List<string> DroppedImagePaths(DragEventArgs e) =>
+        ImageFilePaths(e.DataTransfer.TryGetFiles());
+
+    private void OnCanvasDragOver(object? sender, DragEventArgs e)
+    {
+        e.DragEffects = GtCanvas.Document is not null && DroppedImagePaths(e).Count > 0
+            ? DragDropEffects.Copy
+            : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    /// <summary>each dropped image is added centred on the pointer, later ones cascading so a multi-file drop does not stack them exactly on top of each other</summary>
+    private void OnCanvasDrop(object? sender, DragEventArgs e)
+    {
+        e.Handled = true;
+        if (GtCanvas.Document is null) return;
+
+        var paths = DroppedImagePaths(e);
+        if (paths.Count == 0)
+        {
+            e.DragEffects = DragDropEffects.None;
+            return;
+        }
+
+        e.DragEffects = DragDropEffects.Copy;
+
+        var screenPt = e.GetPosition(GtCanvas);
+        var docPt    = new Point(screenPt.X / _zoom, screenPt.Y / _zoom);
+
+        int added = 0;
+        for (int i = 0; i < paths.Count; i++)
+        {
+            var offset = i * 20.0;
+            if (AddImageFromFile(paths[i], new Point(docPt.X + offset, docPt.Y + offset)) is not null)
+                added++;
+        }
+
+        if (added > 0)
+        {
+            StatusText.Text = added == 1
+                ? $"Added {Path.GetFileName(paths[0])}"
+                : $"Added {added} images";
+        }
+    }
+
     private async System.Threading.Tasks.Task InsertImageAsync()
     {
-        var doc = GtCanvas.Document;
-        if (doc is null) return;
+        if (GtCanvas.Document is null) return;
 
         var path = await PickImageFileAsync("Insert Image");
         if (path is null) return;
 
+        AddImageFromFile(path, null);
+    }
+
+    /// <summary>adds one image file to the document as a GtImageElement at its native pixel size; <paramref name="docPoint"/> is an absolute doc-space point the image is centred on (a drag-and-drop landing spot), null centres it on the canvas like the toolbar button does</summary>
+    private GtImageElement? AddImageFromFile(string path, Point? docPoint)
+    {
         try
         {
-            var bytes = File.ReadAllBytes(path);
+            return AddImageFromBytes(
+                File.ReadAllBytes(path),
+                Path.GetExtension(path).TrimStart('.').ToLowerInvariant(),
+                Path.GetFileNameWithoutExtension(path),
+                docPoint);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"Failed to read image {path}", ex);
+            StatusText.Text = $"Image error: {ex.Message}";
+            return null;
+        }
+    }
 
+    /// <summary>adds already-decoded image bytes as an element; <paramref name="extension"/> and <paramref name="nameHint"/> only shape the asset's logical path, the blob is stored verbatim so a pasted or dropped file keeps its original encoding</summary>
+    private GtImageElement? AddImageFromBytes(byte[] bytes, string extension, string nameHint, Point? docPoint)
+    {
+        var doc = GtCanvas.Document;
+        if (doc is null) return null;
+
+        try
+        {
             double imgWidth, imgHeight;
             using (var ms = new MemoryStream(bytes))
             {
@@ -2088,19 +2266,29 @@ public partial class MainWindow : Window
                 imgHeight = bmp.PixelSize.Height;
             }
 
-            var ext = Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
-            var logicalPath = $"images/{Path.GetFileNameWithoutExtension(path)}_{Guid.NewGuid():N}.{ext}";
+            var logicalPath = $"images/{nameHint}_{Guid.NewGuid():N}.{extension}";
             _currentAssets[logicalPath] = bytes;
             GtCanvas.SetAssets(_currentAssets);
 
-            var layer  = GetOrCreateDefaultLayer(doc);
-            var centerX = (doc.Width  - imgWidth)  / 2 - layer.Location.X;
-            var centerY = (doc.Height - imgHeight) / 2 - layer.Location.Y;
+            var layer = GetOrCreateDefaultLayer(doc);
+
+            // dropped images land centred under the pointer and may hang off the canvas; the picker path stays clamped inside it
+            double localX, localY;
+            if (docPoint is { } p)
+            {
+                localX = p.X - imgWidth  / 2 - layer.Location.X;
+                localY = p.Y - imgHeight / 2 - layer.Location.Y;
+            }
+            else
+            {
+                localX = Math.Max(0, (doc.Width  - imgWidth)  / 2 - layer.Location.X);
+                localY = Math.Max(0, (doc.Height - imgHeight) / 2 - layer.Location.Y);
+            }
 
             var element = new GtImageElement
             {
                 Name         = GenerateElementName(doc, "Image"),
-                Location     = new GtPoint(Math.Max(0, centerX), Math.Max(0, centerY)),
+                Location     = new GtPoint(localX, localY),
                 Dimensions   = new GtSize(imgWidth, imgHeight),
                 BitmapSource = logicalPath,
             };
@@ -2129,11 +2317,13 @@ public partial class MainWindow : Window
 
             LayersPanel.Populate(doc);
             GtCanvas.SetSelection(element);
+            return element;
         }
         catch (Exception ex)
         {
             Logger.Error("Failed to insert image", ex);
             StatusText.Text = $"Image error: {ex.Message}";
+            return null;
         }
     }
 

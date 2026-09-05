@@ -13,7 +13,7 @@
         <DockPanel DockPanel.Dock="Top">
         <Menu DockPanel.Dock="Left">
             <MenuItem Header="_File" x:Name="FileMenu" />
-            <MenuItem Header="_Edit">
+            <MenuItem Header="_Edit" SubmenuOpened="EditMenu_SubmenuOpened">
                 <MenuItem x:Name="UndoMenuItem"
                           Header="_Undo"
                           IsEnabled="False"

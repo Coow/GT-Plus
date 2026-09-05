@@ -752,8 +752,8 @@ attribute holds a comma-separated list, in the order below:
 <TextBlock Name="TextBlock1" DataFlags="Hidden, NoEvents, ShowVisible" ... />
 ```
 
-When no flag is set the attribute is left off the element entirely; GT Title itself usually
-writes `DataFlags="None"`, which parses the same way.
+When no flag is set the attribute may be left off the element entirely; GT Title itself writes
+`DataFlags="None"`, which parses the same way. This editor writes `None` on save.
 
 ### Shapes: `None` means hidden
 
@@ -763,12 +763,11 @@ if `Hidden` were set, so it never shows up in the title editor. GT Title's eleme
 is set explicitly (e.g. `ShowVisible`). `TextBlock` and `Image` keep the documented default -
 absent flags mean "exposed as an editable field by Name".
 
-The editor treats the two spellings as one state. A `Rectangle` / `Ellipse` parsed with no flags
-gets `Hidden` on load, new shapes drawn in the editor start with `Hidden` ticked, and on save a
-shape whose only flag is `Hidden` writes no attribute at all - the same file GT Title produces.
-Clearing the tick is allowed but has no on-disk form: with no other flag set it saves as the
-absent attribute and reads back as `Hidden`. Pair it with `ShowVisible` to actually expose the
-shape.
+This editor does not fold the two spellings together. `DataFlags="None"` (or an absent
+attribute) on a `Rectangle` / `Ellipse` reads back with every tick clear, new shapes drawn in
+the editor start with no flags, and only a flag the user actually ticks is written - `Hidden`
+saves as `DataFlags="Hidden"`. vMix's own "flagless shape behaves as hidden" rule still applies
+at playout; tick `ShowVisible` to expose the shape there.
 
 ---
 

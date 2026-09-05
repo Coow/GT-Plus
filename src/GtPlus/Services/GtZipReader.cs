@@ -365,11 +365,6 @@ public class GtZipReader
         element.Locked = ParseBool(el.Attribute("Locked")?.Value);
         element.DataFlags = ParseDataFlags(el.Attribute("DataFlags")?.Value);
 
-        // GT Title's "None" on a shape means the same thing as Hidden, vMix keeps a flagless Rectangle / Ellipse out of the title editor; normalise it so the flag the user sees matches the behaviour, they stay free to untick it
-        if (element is GtRectangleElement or GtEllipseElement
-            && element.DataFlags == GtDataFlags.None)
-            element.DataFlags = GtDataFlags.Hidden;
-
         // parse <ElementType.Transform><Transform Rotate="rx,ry,rz"/></ElementType.Transform>
         var rotateAttr = el.Element(el.Name.LocalName + ".Transform")
                            ?.Element("Transform")
