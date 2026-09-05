@@ -10,6 +10,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -258,34 +259,74 @@ public partial class MainWindow : Window
         return await dialog.ShowDialog<bool>(this);
     }
 
+    private PixelPoint _normalPosition;
+    private Size       _normalClientSize;
+
     private void RestoreWindowGeometry()
     {
-        // apply saved size/position only if we have valid saved values
-        if (_prefs.WindowX < 0 && _prefs.WindowY < 0) return;
-
-        if (_prefs.WindowWidth >= 640 && _prefs.WindowHeight >= 400)
+        // -1,-1 is the "never saved" sentinel; a real position is negative on any monitor left of or above the primary, so it must not be treated as unset
+        if (_prefs.WindowX != -1 || _prefs.WindowY != -1)
         {
-            ClientSize = new Size(_prefs.WindowWidth, _prefs.WindowHeight);
-            Position   = new PixelPoint(_prefs.WindowX, _prefs.WindowY);
+            if (_prefs.WindowWidth >= 640 && _prefs.WindowHeight >= 400)
+            {
+                var pos = new PixelPoint(_prefs.WindowX, _prefs.WindowY);
+
+                // a monitor that is gone since the last run would leave the window unreachable
+                if (IsPointOnAScreen(pos))
+                {
+                    // position first: the target monitor's scaling then applies to the client size we set
+                    Position   = pos;
+                    ClientSize = new Size(_prefs.WindowWidth, _prefs.WindowHeight);
+                }
+            }
         }
 
         if (Enum.TryParse<WindowState>(_prefs.WindowState, out var ws) && ws != WindowState.Minimized)
             WindowState = ws;
+
+        CaptureNormalGeometry();
+        PositionChanged += (_, _) => CaptureNormalGeometry();
+        SizeChanged     += (_, _) => CaptureNormalGeometry();
+    }
+
+    private void CaptureNormalGeometry()
+    {
+        if (WindowState != WindowState.Normal) return;
+        _normalPosition   = Position;
+        _normalClientSize = ClientSize;
     }
 
     private void SaveWindowGeometry()
     {
-        // always persist the state, only persist size/pos when Normal so we keep sensible restore values even if closing while Maximized
-        _prefs.WindowState = WindowState.ToString();
-        if (WindowState == WindowState.Normal)
+        _prefs.WindowState = WindowState == WindowState.Minimized ? "Normal" : WindowState.ToString();
+
+        CaptureNormalGeometry();   // no-op unless we are Normal right now
+
+        var pos = _normalPosition;
+
+        // a maximized window reports the origin of the monitor it fills; keep the restore rect on that monitor
+        // so a title maximized on the second screen does not come back maximized on the primary one
+        if (WindowState != WindowState.Normal && ScreenAt(Position) is { } screen && !IsPointOnScreen(pos, screen))
+            pos = new PixelPoint(screen.WorkingArea.X + 40, screen.WorkingArea.Y + 40);
+
+        if (_normalClientSize.Width >= 640 && _normalClientSize.Height >= 400)
         {
-            _prefs.WindowX      = Position.X;
-            _prefs.WindowY      = Position.Y;
-            _prefs.WindowWidth  = ClientSize.Width;
-            _prefs.WindowHeight = ClientSize.Height;
+            _prefs.WindowX      = pos.X;
+            _prefs.WindowY      = pos.Y;
+            _prefs.WindowWidth  = _normalClientSize.Width;
+            _prefs.WindowHeight = _normalClientSize.Height;
         }
+
         _prefs.Save();
     }
+
+    private static bool IsPointOnScreen(PixelPoint p, Screen screen) =>
+        screen.Bounds.Contains(new PixelPoint(p.X + 60, p.Y + 20));
+
+    private Screen? ScreenAt(PixelPoint p) =>
+        Screens.All.FirstOrDefault(s => IsPointOnScreen(p, s));
+
+    private bool IsPointOnAScreen(PixelPoint p) => ScreenAt(p) is not null;
 
     private void OnSelectionChanged(object? sender, EventArgs e)
     {
