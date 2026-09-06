@@ -1,0 +1,59 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="GtPlus.Views.SequenceLengthWindow"
+        Title="Sequence Length"
+        Width="330" Height="285"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="#1a1a1a">
+
+    <StackPanel Margin="18" Spacing="12">
+
+        <TextBlock x:Name="HeaderText"
+                   Text="Image sequence"
+                   FontSize="13"
+                   FontWeight="SemiBold"
+                   Foreground="#eeeeee" />
+
+        <TextBlock x:Name="FramesText"
+                   Text="0 frames"
+                   FontSize="12"
+                   Foreground="#cccccc" />
+
+        <StackPanel Spacing="4">
+            <TextBlock Text="Title frame rate (fps)"
+                       FontSize="12"
+                       Foreground="#cccccc" />
+            <NumericUpDown x:Name="FpsBox"
+                           FormatString="0.###"
+                           Minimum="1" Maximum="1000"
+                           Increment="1"
+                           FontSize="12"
+                           ValueChanged="Fps_Changed" />
+        </StackPanel>
+
+        <TextBlock x:Name="ResultText"
+                   FontSize="12"
+                   Foreground="#9ccdf5" />
+
+        <TextBlock x:Name="CurrentText"
+                   FontSize="11"
+                   Foreground="#777777" />
+
+        <Grid ColumnDefinitions="*,Auto,Auto">
+            <Button Grid.Column="1"
+                    Content="Cancel"
+                    Padding="12,5"
+                    Margin="0,0,8,0"
+                    IsCancel="True"
+                    Click="Cancel_Click" />
+            <Button Grid.Column="2"
+                    Content="Apply"
+                    Padding="16,5"
+                    IsDefault="True"
+                    Click="Ok_Click" />
+        </Grid>
+
+    </StackPanel>
+</Window>

@@ -340,6 +340,28 @@
                     </Panel>
                 </Button>
 
+                <!-- image sequence: many frames behind one resource, so it gets its own insert with a source picker -->
+                <Button x:Name="ImageSequenceToolButton"
+                        ToolTip.Tip="Image Sequence (Shift+I files, Ctrl+Shift+I folder) - Insert numbered frames as one sequence; a folder can also be dropped on the canvas"
+                        Padding="7,7">
+                    <Button.Flyout>
+                        <MenuFlyout Placement="Right">
+                            <MenuItem Header="From _Files..."  Click="ImageSequenceFromFiles_Click" />
+                            <MenuItem Header="From F_older..." Click="ImageSequenceFromFolder_Click" />
+                        </MenuFlyout>
+                    </Button.Flyout>
+                    <Panel Width="16" Height="16">
+                        <Path Fill="#cccccc" Stretch="None"
+                              Data="F1 M 4,0 L 16,0 L 16,10 L 14,10 L 14,2 L 4,2 Z" />
+                        <Path Fill="#cccccc" Stretch="None"
+                              Data="F1 M 2,3 L 13,3 L 13,12 L 11,12 L 11,5 L 2,5 Z" />
+                        <Path Fill="#cccccc" Stretch="None"
+                              Data="F1 M 0,6 L 10,6 L 10,16 L 0,16 Z M 1,7 L 1,15 L 9,15 L 9,7 Z" />
+                        <Path Fill="#cccccc" Stretch="None"
+                              Data="M 3,9 L 7,11 L 3,13 Z" />
+                    </Panel>
+                </Button>
+
             </StackPanel>
         </Border>
 

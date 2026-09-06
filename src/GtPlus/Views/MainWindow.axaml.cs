@@ -112,6 +112,15 @@ public partial class MainWindow : Window
                                       RoutingStrategies.Tunnel);
         TimelinePanel.StoryboardEdited   += () => GtCanvas.InvalidateVisual();
 
+        // the layers panel offers the same sequence shortcut the timeline strip carries; the timeline owns both the enable rule and the work
+        LayersPanel.CanAddSequenceAnimation = TimelinePanel.CanAddSequenceAnimation;
+        LayersPanel.AddSequenceAnimationRequested = element =>
+        {
+            // the clip lands on the timeline, so it comes into view with it
+            SetTimelineVisible(true);
+            TimelinePanel.AddSequenceAnimation(element);
+        };
+
         HistoryPanel.History = _history;
         PropertiesPanel.History = _history;
         _history.Changed += OnHistoryChanged;
@@ -339,6 +348,8 @@ public partial class MainWindow : Window
         bool hasElements = GtCanvas.SelectedElements.Count > 0;
         DuplicateElementMenuItem.IsEnabled = hasElements;
         DeleteElementMenuItem.IsEnabled    = hasElements;
+
+        TimelinePanel.RefreshSelectionState();
     }
 
     private bool _draggingRulerOrigin;
@@ -720,6 +731,8 @@ public partial class MainWindow : Window
     private void RectangleToolButton_Click(object? sender, RoutedEventArgs e) => SetTool(CanvasTool.Rectangle);
     private void TickerToolButton_Click(object? sender, RoutedEventArgs e)    => SetTool(CanvasTool.Ticker);
     private void ImageToolButton_Click(object? sender, RoutedEventArgs e)     => _ = InsertImageAsync();
+    private void ImageSequenceFromFiles_Click(object? sender, RoutedEventArgs e)  => _ = InsertImageSequenceAsync(fromFolder: false);
+    private void ImageSequenceFromFolder_Click(object? sender, RoutedEventArgs e) => _ = InsertImageSequenceAsync(fromFolder: true);
     private void PixelGridLockButton_Click(object? sender, RoutedEventArgs e) =>
         GtCanvas.SnapToPixelGrid = PixelGridLockButton.IsChecked == true;
 
@@ -760,6 +773,14 @@ public partial class MainWindow : Window
                 break;
             case Key.I when e.KeyModifiers == KeyModifiers.None && e.Source is not TextBox:
                 _ = InsertImageAsync();
+                e.Handled = true;
+                break;
+            case Key.I when e.KeyModifiers == KeyModifiers.Shift && e.Source is not TextBox:
+                _ = InsertImageSequenceAsync(fromFolder: false);
+                e.Handled = true;
+                break;
+            case Key.I when e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift) && e.Source is not TextBox:
+                _ = InsertImageSequenceAsync(fromFolder: true);
                 e.Handled = true;
                 break;
             case Key.F2 when e.KeyModifiers == KeyModifiers.None && e.Source is not TextBox:
@@ -2177,6 +2198,15 @@ public partial class MainWindow : Window
         }
     }
 
+    private static FilePickerFileType[] ImageFileTypes => new[]
+    {
+        new FilePickerFileType("Image Files")
+        {
+            Patterns = new[] { "*.jpg", "*.jpeg", "*.png", "*.bmp", "*.gif", "*.dds" }
+        },
+        new FilePickerFileType("All Files") { Patterns = new[] { "*.*" } }
+    };
+
     /// <summary>shows the image file picker, returns the chosen local path or null</summary>
     private async System.Threading.Tasks.Task<string?> PickImageFileAsync(string title)
     {
@@ -2184,21 +2214,43 @@ public partial class MainWindow : Window
         {
             Title = title,
             AllowMultiple = false,
-            FileTypeFilter = new[]
-            {
-                new FilePickerFileType("Image Files")
-                {
-                    Patterns = new[] { "*.jpg", "*.jpeg", "*.png", "*.bmp", "*.gif", "*.dds" }
-                },
-                new FilePickerFileType("All Files") { Patterns = new[] { "*.*" } }
-            }
+            FileTypeFilter = ImageFileTypes
         });
 
         return files.Count == 0 ? null : files[0].TryGetLocalPath();
     }
 
-    private static readonly string[] ImageFileExtensions =
-        { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".dds" };
+    /// <summary>shows a multi-select image file picker, returns the chosen local paths in the order the platform hands them over</summary>
+    private async System.Threading.Tasks.Task<List<string>> PickImageFilesAsync(string title)
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = title,
+            AllowMultiple = true,
+            FileTypeFilter = ImageFileTypes
+        });
+
+        var result = new List<string>();
+        foreach (var file in files)
+        {
+            var path = file.TryGetLocalPath();
+            if (path is not null) result.Add(path);
+        }
+
+        return result;
+    }
+
+    /// <summary>shows the folder picker, returns the chosen local folder path or null</summary>
+    private async System.Threading.Tasks.Task<string?> PickFolderAsync(string title)
+    {
+        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = title,
+            AllowMultiple = false
+        });
+
+        return folders.Count == 0 ? null : folders[0].TryGetLocalPath();
+    }
 
     /// <summary>local paths of the storage items we can turn into image elements, in the order the platform handed them over</summary>
     private static List<string> ImageFilePaths(IEnumerable<IStorageItem>? files)
@@ -2210,7 +2262,23 @@ public partial class MainWindow : Window
         {
             var path = file.TryGetLocalPath();
             if (path is null) continue;
-            if (Array.IndexOf(ImageFileExtensions, Path.GetExtension(path).ToLowerInvariant()) >= 0)
+            if (ImageSequenceBuilder.IsImageFile(path))
+                result.Add(path);
+        }
+
+        return result;
+    }
+
+    /// <summary>local paths of the dropped items that are folders; a folder of numbered frames is how a render arrives, so it lands as a sequence rather than as nothing</summary>
+    private static List<string> FolderPaths(IEnumerable<IStorageItem>? files)
+    {
+        var result = new List<string>();
+        if (files is null) return result;
+
+        foreach (var file in files)
+        {
+            var path = file.TryGetLocalPath();
+            if (path is not null && Directory.Exists(path))
                 result.Add(path);
         }
 
@@ -2220,22 +2288,27 @@ public partial class MainWindow : Window
     private static List<string> DroppedImagePaths(DragEventArgs e) =>
         ImageFilePaths(e.DataTransfer.TryGetFiles());
 
+    private static List<string> DroppedFolderPaths(DragEventArgs e) =>
+        FolderPaths(e.DataTransfer.TryGetFiles());
+
     private void OnCanvasDragOver(object? sender, DragEventArgs e)
     {
-        e.DragEffects = GtCanvas.Document is not null && DroppedImagePaths(e).Count > 0
+        e.DragEffects = GtCanvas.Document is not null &&
+                        (DroppedImagePaths(e).Count > 0 || DroppedFolderPaths(e).Count > 0)
             ? DragDropEffects.Copy
             : DragDropEffects.None;
         e.Handled = true;
     }
 
-    /// <summary>each dropped image is added centred on the pointer, later ones cascading so a multi-file drop does not stack them exactly on top of each other</summary>
+    /// <summary>each dropped image is added centred on the pointer, later ones cascading so a multi-file drop does not stack them exactly on top of each other; a dropped folder is added whole, as one image sequence per folder</summary>
     private void OnCanvasDrop(object? sender, DragEventArgs e)
     {
         e.Handled = true;
         if (GtCanvas.Document is null) return;
 
-        var paths = DroppedImagePaths(e);
-        if (paths.Count == 0)
+        var paths   = DroppedImagePaths(e);
+        var folders = DroppedFolderPaths(e);
+        if (paths.Count == 0 && folders.Count == 0)
         {
             e.DragEffects = DragDropEffects.None;
             return;
@@ -2260,6 +2333,13 @@ public partial class MainWindow : Window
                 ? $"Added {Path.GetFileName(paths[0])}"
                 : $"Added {added} images";
         }
+
+        // folders are added after the loose files so the sequence's own status line has the last word
+        for (int i = 0; i < folders.Count; i++)
+        {
+            var offset = (paths.Count + i) * 20.0;
+            _ = AddImageSequenceFromFolderAsync(folders[i], new Point(docPt.X + offset, docPt.Y + offset));
+        }
     }
 
     private async System.Threading.Tasks.Task InsertImageAsync()
@@ -2270,6 +2350,159 @@ public partial class MainWindow : Window
         if (path is null) return;
 
         AddImageFromFile(path, null);
+    }
+
+    /// <summary>picks the frames of an image sequence and inserts them as one element; <paramref name="fromFolder"/> takes every image in a chosen folder instead of a hand-picked file set, which is how a render usually arrives</summary>
+    private async System.Threading.Tasks.Task InsertImageSequenceAsync(bool fromFolder)
+    {
+        if (GtCanvas.Document is null) return;
+
+        if (fromFolder)
+        {
+            var folder = await PickFolderAsync("Insert Image Sequence From Folder");
+            if (folder is null) return;
+
+            await AddImageSequenceFromFolderAsync(folder, null);
+            return;
+        }
+
+        var paths = await PickImageFilesAsync("Insert Image Sequence");
+        if (paths.Count == 0) return;
+
+        // a one-frame sequence is just an image, and GT would write it as an ordinary single-source resource anyway
+        if (paths.Count == 1)
+        {
+            AddImageFromFile(paths[0], null);
+            return;
+        }
+
+        await AddImageSequenceAsync(
+            ImageSequenceBuilder.SortNatural(paths),
+            SequenceNameHint(paths[0]),
+            null);
+    }
+
+    /// <summary>adds every image directly inside a folder as one sequence, in natural frame order</summary>
+    private async System.Threading.Tasks.Task AddImageSequenceFromFolderAsync(string folder, Point? docPoint)
+    {
+        if (GtCanvas.Document is null) return;
+
+        List<string> frames;
+        try
+        {
+            frames = ImageSequenceBuilder.ImageFilesInFolder(folder);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"Failed to list image sequence folder {folder}", ex);
+            StatusText.Text = $"Image error: {ex.Message}";
+            return;
+        }
+
+        if (frames.Count == 0)
+        {
+            StatusText.Text = $"No images in {Path.GetFileName(folder.TrimEnd('/', '\\'))}";
+            return;
+        }
+
+        if (frames.Count == 1)
+        {
+            AddImageFromFile(frames[0], docPoint);
+            return;
+        }
+
+        await AddImageSequenceAsync(frames, Path.GetFileName(folder.TrimEnd('/', '\\')), docPoint);
+    }
+
+    /// <summary>a sequence's asset folder is named after its first frame with the frame number stripped, so GameOpener00000.png yields "GameOpener"</summary>
+    private static string SequenceNameHint(string firstFramePath)
+    {
+        var name = Path.GetFileNameWithoutExtension(firstFramePath).TrimEnd('0', '1', '2', '3', '4', '5', '6', '7', '8', '9');
+        name = name.TrimEnd('_', '-', '.', ' ');
+        return name.Length > 0 ? name : "Sequence";
+    }
+
+    /// <summary>adds an ordered frame list as one image sequence resource plus the image element anchored on frame 0; the frames are read off disk on a worker thread since a render folder runs to hundreds of files</summary>
+    private async System.Threading.Tasks.Task<GtImageElement?> AddImageSequenceAsync(
+        List<string> framePaths, string nameHint, Point? docPoint)
+    {
+        var doc = GtCanvas.Document;
+        if (doc is null) return null;
+
+        try
+        {
+            StatusText.Text = $"Reading {framePaths.Count} frames…";
+            var built = await System.Threading.Tasks.Task.Run(
+                () => ImageSequenceBuilder.Build(framePaths, nameHint));
+
+            double imgWidth, imgHeight;
+            using (var ms = new MemoryStream(built.Blobs[built.Anchor]))
+            {
+                var bmp = new Avalonia.Media.Imaging.Bitmap(ms);
+                imgWidth  = bmp.PixelSize.Width;
+                imgHeight = bmp.PixelSize.Height;
+            }
+
+            var layer = GetOrCreateDefaultLayer(doc);
+
+            // dropped sequences land centred under the pointer and may hang off the canvas; the picker path stays clamped inside it
+            double localX, localY;
+            if (docPoint is { } p)
+            {
+                localX = p.X - imgWidth  / 2 - layer.Location.X;
+                localY = p.Y - imgHeight / 2 - layer.Location.Y;
+            }
+            else
+            {
+                localX = Math.Max(0, (doc.Width  - imgWidth)  / 2 - layer.Location.X);
+                localY = Math.Max(0, (doc.Height - imgHeight) / 2 - layer.Location.Y);
+            }
+
+            var element = new GtImageElement
+            {
+                Name         = GenerateElementName(doc, "Sequence"),
+                Location     = new GtPoint(localX, localY),
+                Dimensions   = new GtSize(imgWidth, imgHeight),
+                BitmapSource = built.Anchor,   // document.xml only ever names the anchor, the frames live in resources.xml
+            };
+
+            void Apply()
+            {
+                foreach (var (framePath, bytes) in built.Blobs)
+                    _currentAssets[framePath] = bytes;
+                _currentAssets.AddSequence(built.Anchor, built.Frames);
+                GtCanvas.SetAssets(_currentAssets);
+
+                if (!layer.Elements.Contains(element)) layer.Elements.Add(element);
+                GtCanvas.SetSelection(element);
+                LayersPanel.Populate(doc);
+                UpdateDebugPanel();
+            }
+
+            void Revert()
+            {
+                layer.Elements.Remove(element);
+                _currentAssets.Remove(built.Anchor);   // an anchor takes every frame of its sequence with it
+                GtCanvas.SetAssets(_currentAssets);
+                GtCanvas.ClearSelection();
+                LayersPanel.Populate(doc);
+                UpdateDebugPanel();
+            }
+
+            Apply();
+
+            _history.Push(new PropertyChangeAction($"Add {element.Name}", undo: Revert, redo: Apply));
+
+            StatusText.Text = $"Added {element.Name} ({built.Frames.Count} frames)";
+            Logger.Info($"Added image sequence '{built.Anchor}' with {built.Frames.Count} frames");
+            return element;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Failed to insert image sequence", ex);
+            StatusText.Text = $"Image error: {ex.Message}";
+            return null;
+        }
     }
 
     /// <summary>adds one image file to the document as a GtImageElement at its native pixel size; <paramref name="docPoint"/> is an absolute doc-space point the image is centred on (a drag-and-drop landing spot), null centres it on the canvas like the toolbar button does</summary>

@@ -40,6 +40,8 @@ Don't automatically commit to git
   `Name.Fill.Color`/`.Fill.Bitmap`, ticker template children). Only direct children of a
   top-level layer register one, and the list is reversed, matching GT. These are the scopes a
   DataChangeIn/Out storyboard can be keyed to; `Hidden`/`NoEvents` fields are not offered
+- **`ImageSequenceBuilder.cs`** - turns files/folders on disk into a GTZIP image sequence: natural
+  (digit-aware) frame ordering, one logical asset folder per sequence, frame 0 as the anchor
 - **`TickerLayout.cs`** - ticker text splitting + GT's per-frame scroll walk, replayed as a pure
   function of the frame number (`Simulate`) or laid out flush at rest (`Rest`)
 - **`FfmpegService.cs`** - locates the ffmpeg binary (prefs path → app dir → PATH → usual install dirs); can download the official Windows build into `%APPDATA%/GtPlus/ffmpeg`
@@ -75,6 +77,10 @@ Don't automatically commit to git
   - `OnKeyDown`: S=Select, E=Edit, Ctrl+Z=Undo, Ctrl+Y=Redo, Ctrl+S=Save, Ctrl+Shift+S=SaveAs
   - Middle-click drag = pan canvas; Ctrl+scroll = zoom
 - **`ExportVideoWindow.axaml/.cs`** - MP4 export dialog: storyboard (single, or the TransitionIn+TransitionOut pair), hold seconds, fps, quality, background, output path
+- **`SequenceLengthWindow.axaml/.cs`** - sets an ImageSequence clip's Duration from the sequence's
+  frame count and a target frame rate (default 60 fps); opened by the timeline strip's "Frames..." button,
+  and straight away by the "+ Sequence" button / layers-panel "Add Image Sequence Animation..." entry, which
+  create the clip on the storyboard the timeline is showing (both grey out when no storyboard is selected)
 - **`PreferencesWindow.axaml/.cs`** - preferences dialog (outside canvas opacity, debug panel toggle, update check on startup)
 - **`UpdateWindow.axaml/.cs`** - update check result: version numbers, release notes, "Open Download Page" / "Skip This Version". Opened from File > Check for Updates, and at startup only when a newer, non-skipped release exists
 

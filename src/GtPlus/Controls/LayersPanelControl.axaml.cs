@@ -809,11 +809,18 @@ public partial class LayersPanelControl : UserControl
         var delete = new MenuItem { Header = "Delete" };
         delete.Click += (_, _) => DeleteElements();
 
+        // only an image sitting on a multi-frame sequence has a sequence clip to author
+        var sequenceSeparator = new Separator { IsVisible = false };
+        var addSequence = new MenuItem { Header = "Add Image Sequence Animation...", IsVisible = false };
+        addSequence.Click += (_, _) => AddSequenceAnimationRequested?.Invoke(element);
+
         var menu = new ContextMenu();
         menu.Items.Add(rename);
         menu.Items.Add(new Separator());
         menu.Items.Add(duplicate);
         menu.Items.Add(delete);
+        menu.Items.Add(sequenceSeparator);
+        menu.Items.Add(addSequence);
 
         menu.Opened += (_, _) =>
         {
@@ -825,10 +832,28 @@ public partial class LayersPanelControl : UserControl
             duplicate.IsEnabled = count > 0;
             // a locked element is immovable everywhere else, so it is not deletable either
             delete.IsEnabled    = DeletableSelection().Count > 0;
+
+            bool isSequence = SequenceFrameCount(element) > 1;
+            sequenceSeparator.IsVisible = isSequence;
+            addSequence.IsVisible       = isSequence;
+            // greyed rather than hidden while the timeline shows no storyboard: the command exists, it just has nowhere to put the clip yet
+            addSequence.IsEnabled       = CanAddSequenceAnimation?.Invoke(element) == true;
         };
 
         return menu;
     }
+
+    /// <summary>frames behind the sequence an element draws, 1 for an ordinary still</summary>
+    private int SequenceFrameCount(GtElement element) =>
+        element is GtImageElement img && img.BitmapSource is not null && _canvas is not null
+            ? _canvas.Assets.FrameCount(img.BitmapSource)
+            : 1;
+
+    /// <summary>host hook: true when an ImageSequence clip can be added for this element right now, which needs a storyboard on the timeline to hold it</summary>
+    public Func<GtElement, bool>? CanAddSequenceAnimation { get; set; }
+
+    /// <summary>host hook: add an ImageSequence clip for this element and open the length helper</summary>
+    public Action<GtElement>? AddSequenceAnimationRequested { get; set; }
 
     /// <summary>F2 entry point, returns false when there is nothing to rename</summary>
     public bool BeginRenameFocused()

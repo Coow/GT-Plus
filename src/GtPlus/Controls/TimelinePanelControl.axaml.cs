@@ -15,6 +15,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using GtPlus.Models;
 using GtPlus.Services;
+using GtPlus.Views;
 
 namespace GtPlus.Controls;
 
@@ -228,6 +229,9 @@ public partial class TimelinePanelControl : UserControl
             if (fallback < 0) fallback = 0;
             ShowView(fallback);
         }
+
+        // a rebuild that kept the user on the same view skips SetView, so the shortcut is re-checked here too: a document going from no storyboards to one makes it available
+        RefreshSelectionState();
     }
 
     /// <summary>one combined view per DataChange scope, showing what vMix actually plays when a field changes: the unscoped storyboard and the field's own one build into the same timeline so both are laid on top of each other here too; there is no hold between the halves since vMix commits the new values the moment the in phase ends and starts the out phase straight away, so the pair runs as one continuous sequence</summary>
@@ -301,6 +305,7 @@ public partial class TimelinePanelControl : UserControl
         SetTime(0);
         UpdateTimeLabel();
         ReportOverLimitObjects();
+        RefreshSelectionState();
     }
 
     /// <summary>storyboards currently on the timeline, in display order</summary>
@@ -861,7 +866,7 @@ public partial class TimelinePanelControl : UserControl
     /// <summary>snapshots the clips a scrub will drive, false when there is nothing selected</summary>
     private bool BeginClipScrub()
     {
-        if (_selected is null || !ClipProperties.IsEnabled) return false;
+        if (_selected is null || !ClipPropertiesEnabled) return false;
 
         _scrubTargets = SelectedAnimations.Count > 0
             ? SelectedAnimations.ToList()
@@ -936,7 +941,7 @@ public partial class TimelinePanelControl : UserControl
         int count = SelectedAnimations.Count;
         DeleteButton.IsEnabled   = count > 0;
         // the strip stays put with nothing selected, greyed out rather than gone so the track below it never jumps as clips are selected and deselected
-        ClipProperties.IsEnabled = anim is not null;
+        SetClipPropertiesEnabled(anim is not null);
         SelectionBadge.IsVisible = count > 1;
         SelectionLabel.Text      = count > 1 ? $"{count} clips selected" : "";
 
@@ -945,6 +950,22 @@ public partial class TimelinePanelControl : UserControl
 
     /// <summary>every clip the strip edits: the whole track selection, primary last</summary>
     private IReadOnlyList<GtAnimation> SelectedAnimations => Track.SelectedAnimations;
+
+    /// <summary>the clip controls are spread over the bar's grid cells so their columns line up down the two rows; they carry one enable state between them so a selection greys or lights the lot</summary>
+    private bool ClipPropertiesEnabled => ObjectCombo.IsEnabled;
+
+    private void SetClipPropertiesEnabled(bool enabled)
+    {
+        foreach (var control in new Control[]
+                 {
+                     SelectionBadge,
+                     ObjectLabel, ObjectCombo, TypeLabel, TypeCombo,
+                     DelayLabel, DelayBox, DurationLabel, DurationBox,
+                     EasingLabel, EasingCombo, SpeedLabel, SpeedBox,
+                     ClipPropertiesDirection,
+                 })
+            control.IsEnabled = enabled;
+    }
 
     private GtStoryboard? StoryboardOf(GtAnimation anim) =>
         VisibleStoryboards.FirstOrDefault(s => s.Animations.Contains(anim));
@@ -1060,7 +1081,143 @@ public partial class TimelinePanelControl : UserControl
         SpeedBox.IsEnabled      = continuous;
         DurationLabel.IsEnabled = !continuous;
         DurationBox.IsEnabled   = !continuous;
+
+        // the frame-count helper only means anything when the clip actually drives a sequence of more than one frame
+        SequenceLengthButton.IsEnabled = SequenceFrameCount(anim) > 1;
     }
+
+    /// <summary>frame rate the sequence-length helper offers, remembered for the session after the first use</summary>
+    private double _sequenceFps = DefaultSequenceFps;
+
+    /// <summary>frame rate a title runs at unless the user says otherwise; vMix renders GT titles at 60</summary>
+    private const double DefaultSequenceFps = 60;
+
+    /// <summary>frames behind the sequence the clip's object draws, 0 when the clip is not a sequence animation or its object is not an image element anchored on one</summary>
+    private int SequenceFrameCount(GtAnimation? anim)
+    {
+        if (anim is null) return 0;
+        if (anim.Type != GtAnimationType.ImageSequence && anim.Type != GtAnimationType.ImageSequenceLoop)
+            return 0;
+
+        return SequenceFrameCountOf(ElementNamed(anim.Object));
+    }
+
+    /// <summary>frames behind the sequence an element draws, 0 when it is not an image anchored on a multi-frame sequence</summary>
+    private int SequenceFrameCountOf(GtElement? element)
+    {
+        if (element is not GtImageElement img || img.BitmapSource is null) return 0;
+
+        var assets = Canvas?.Assets;
+        if (assets is null) return 0;
+
+        // FrameCount reports 1 for an ordinary still, which is not a sequence to fit
+        int count = assets.FrameCount(img.BitmapSource);
+        return count > 1 ? count : 0;
+    }
+
+    private GtElement? ElementNamed(string name)
+    {
+        if (_document is null || string.IsNullOrEmpty(name)) return null;
+
+        foreach (var layer in _document.Layers)
+            foreach (var el in layer.Elements)
+                if (string.Equals(el.Name, name, StringComparison.OrdinalIgnoreCase))
+                    return el;
+
+        return null;
+    }
+
+    private void SequenceLength_Click(object? sender, RoutedEventArgs e)
+    {
+        var anim = _selected;
+        if (anim is null) return;
+
+        // the whole selection is retimed, matching how every other control in the strip applies to the group
+        var targets = SelectedAnimations.Where(a => SequenceFrameCount(a) > 1).ToList();
+        if (targets.Count == 0) targets.Add(anim);
+
+        _ = FitSequenceLengthAsync(anim, targets);
+    }
+
+    /// <summary>sets clip length from the sequence's frame count and a frame rate the user picks: an ImageSequence fits the whole sequence into Duration (and an ImageSequenceLoop makes one loop that long), so frames / fps is the length that plays it at one frame per title frame; each target is retimed against its own frame count so one fps answers for a whole group</summary>
+    private async System.Threading.Tasks.Task FitSequenceLengthAsync(
+        GtAnimation anim, IReadOnlyList<GtAnimation> targets)
+    {
+        int frames = SequenceFrameCount(anim);
+        if (frames <= 1) return;
+
+        if (TopLevel.GetTopLevel(this) is not Window owner) return;
+
+        var dialog = new SequenceLengthWindow(anim.Object, frames, _sequenceFps, anim.EffectiveDuration);
+        if (!await dialog.ShowDialog<bool>(owner)) return;
+
+        _sequenceFps = dialog.Fps;
+
+        var befores = targets.Select(t => t.Clone()).ToList();
+        foreach (var target in targets)
+            target.Duration = Math.Max(0.01, Math.Round(SequenceFrameCount(target) / _sequenceFps, 3));
+        var afters = targets.Select(t => t.Clone()).ToList();
+
+        var description = targets.Count > 1
+            ? $"Fit {targets.Count} sequences to {Fmt(_sequenceFps)} fps"
+            : $"Fit {anim.TypeName} to {Fmt(_sequenceFps)} fps";
+
+        PushEdit(description, targets, befores, afters);
+
+        LoadPropertyStrip(anim);
+        AfterModelChange();
+    }
+
+    /// <summary>true when an ImageSequence clip can be added for <paramref name="element"/>: it draws a multi-frame sequence and the timeline is showing a storyboard to hold the clip; with no storyboard picked there is nothing to add to, so the entry points grey out rather than inventing one</summary>
+    public bool CanAddSequenceAnimation(GtElement? element) =>
+        SequenceFrameCountOf(element) > 1 && TargetStoryboard is not null;
+
+    /// <summary>the storyboard a new clip lands on: the half of a combined view the selection sits in, else the first one shown</summary>
+    private GtStoryboard? TargetStoryboard => _selectedStoryboard ?? VisibleStoryboards.FirstOrDefault();
+
+    /// <summary>adds an ImageSequence clip for the element on the storyboard currently shown and opens the length helper straight away, since the only length worth having is frames / fps</summary>
+    public void AddSequenceAnimation(GtElement? element)
+    {
+        if (element is null) return;
+
+        int frames = SequenceFrameCountOf(element);
+        if (frames <= 1) return;
+
+        var storyboard = TargetStoryboard;
+        if (storyboard is null) return;
+
+        if (!EnsureRoomFor(storyboard, element.Name)) return;
+
+        // a Continuous storyboard runs only never-ending types, where the looping sequence is the one that belongs
+        bool loop = storyboard.IsContinuousEvent;
+
+        var anim = new GtAnimation
+        {
+            TypeName = loop ? "ImageSequenceLoop" : "ImageSequence",
+            Type     = loop ? GtAnimationType.ImageSequenceLoop : GtAnimationType.ImageSequence,
+            Object   = element.Name,
+            Duration = Math.Max(0.01, Math.Round(frames / _sequenceFps, 3)),
+        };
+
+        var owner = storyboard;
+        owner.Animations.Add(anim);
+        History?.Push(new PropertyChangeAction($"Add {anim.TypeName} animation",
+            undo: () => { owner.Animations.Remove(anim); AfterModelChange(); SelectAnimation(null); },
+            redo: () => { owner.Animations.Add(anim);    AfterModelChange(); SelectAnimation(anim, owner); }));
+
+        AfterModelChange();
+        SelectAnimation(anim, owner);
+
+        // the clip is only useful once it is the right length, so the helper opens on the new clip without a second click
+        _ = FitSequenceLengthAsync(anim, new[] { anim });
+    }
+
+    private void AddSequenceAnimation_Click(object? sender, RoutedEventArgs e) =>
+        AddSequenceAnimation(SelectedElementProvider?.Invoke());
+
+    /// <summary>re-reads what the canvas has selected; the host calls it when the selection moves so the sequence shortcut greys in step with it</summary>
+    public void RefreshSelectionState() =>
+        AddSequenceButton.IsEnabled = CanAddSequenceAnimation(SelectedElementProvider?.Invoke());
 
     private void AnimationProperty_Changed(object? sender, RoutedEventArgs e)
     {
