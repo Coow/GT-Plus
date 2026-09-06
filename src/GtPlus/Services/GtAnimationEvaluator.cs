@@ -91,6 +91,13 @@ public sealed class GtAnimationFrame
         if (!_elements.TryGetValue(element, out var o)) _elements[element] = o = new GtAnimOverride();
         return o;
     }
+
+    /// <summary>takes over every target <paramref name="other"/> touched, replacing what this frame already said about it rather than composing; that is how one storyboard hands over to the next on a combined timeline, each storyboard fully owning the objects it names</summary>
+    internal void Absorb(GtAnimationFrame other)
+    {
+        foreach (var pair in other._layers)   _layers[pair.Key]   = pair.Value;
+        foreach (var pair in other._elements) _elements[pair.Key] = pair.Value;
+    }
 }
 
 /// <summary>evaluates a <see cref="GtStoryboard"/> at an arbitrary time without mutating the document, drives both timeline scrubbing and playback preview; the per-direction tables below are transcribed from GT one row at a time rather than derived from a generic (dx,dy) vector because several are deliberately asymmetric, Rotate emits nothing for <c>None</c>, Scroll names the edge it travels toward where Fly names the edge it comes from, and the brush-offset pair folds <c>Center</c> in with <c>Left</c>, so a "clever" mapping diverges from vMix output</summary>
@@ -132,7 +139,7 @@ public static class GtAnimationEvaluator
         return frame;
     }
 
-    /// <summary>builds one override set from several storyboards laid out on a shared timeline; segments accumulate into the same frame so a TransitionIn/TransitionOut pair reads exactly like stacked animations on one storyboard, the out half takes over from wherever the in half settled</summary>
+    /// <summary>builds one override set from several storyboards laid out on a shared timeline; segments that share an offset run together and accumulate into one frame, and each later phase that has started takes over the objects it names from the phase before it, exactly as vMix hands a title from its TransitionIn to its TransitionOut - objects the later phase says nothing about keep wherever the earlier one settled</summary>
     public static GtAnimationFrame Evaluate(GtDocument document,
                                             IReadOnlyList<GtTimelineSegment>? segments,
                                             double time)
@@ -140,17 +147,38 @@ public static class GtAnimationEvaluator
         var frame = new GtAnimationFrame { Time = time };
         if (segments is null) return frame;
 
-        foreach (var segment in segments)
+        foreach (double offset in PhaseOffsets(segments))
         {
-            double local = time - segment.Offset;
+            double local = time - offset;
+            GtAnimationFrame? phase = null;
 
-            // a segment contributes nothing before it starts; without this a TransitionOut whose objects are Hidden or driven by an ImageSequence would alter the picture while the in half is still playing instead of picking up from its last frame; its pre-roll counts as part of it, a negative delay is computed ahead of the segment's own zero so the gate opens at the earliest clip rather than at zero
-            if (local < segment.Storyboard.EarliestStart) continue;
+            foreach (var segment in segments)
+            {
+                if (segment.Offset != offset) continue;
 
-            Accumulate(frame, document, segment.Storyboard, local, segment.Storyboard.PlaysRewound);
+                // a segment contributes nothing before it starts; without this a TransitionOut whose objects are Hidden or driven by an ImageSequence would alter the picture while the in half is still playing instead of picking up from its last frame; its pre-roll counts as part of it, a negative delay is computed ahead of the segment's own zero so the gate opens at the earliest clip rather than at zero
+                if (local < segment.Storyboard.EarliestStart) continue;
+
+                phase ??= new GtAnimationFrame { Time = time };
+                Accumulate(phase, document, segment.Storyboard, local, segment.Storyboard.PlaysRewound);
+            }
+
+            // a phase replaces rather than composes: a TransitionIn that leaves an object Hidden (or parked on one frame of an image sequence) must not keep doing so once the TransitionOut that animates that same object has taken it over
+            if (phase is not null) frame.Absorb(phase);
         }
 
         return frame;
+    }
+
+    /// <summary>the distinct segment offsets in ascending order; each one is a phase of the timeline, and every segment sharing it plays alongside the others</summary>
+    private static List<double> PhaseOffsets(IReadOnlyList<GtTimelineSegment> segments)
+    {
+        var offsets = new List<double>();
+        foreach (var segment in segments)
+            if (!offsets.Contains(segment.Offset)) offsets.Add(segment.Offset);
+
+        offsets.Sort();
+        return offsets;
     }
 
     /// <summary>applies one storyboard's animations at <paramref name="time"/> into <paramref name="frame"/></summary>
