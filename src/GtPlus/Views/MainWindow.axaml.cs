@@ -121,6 +121,8 @@ public partial class MainWindow : Window
             TimelinePanel.AddSequenceAnimation(element);
         };
 
+        LayersPanel.ConvertToDataDrivenColorRequested = ConvertToDataDrivenColor;
+
         HistoryPanel.History = _history;
         PropertiesPanel.History = _history;
         _history.Changed += OnHistoryChanged;
@@ -475,7 +477,7 @@ public partial class MainWindow : Window
                 : "guides") + "." + GuidesPart.FileExtension,
             FileTypeChoices = new[]
             {
-                new FilePickerFileType("GT++ Guides") { Patterns = new[] { "*." + GuidesPart.FileExtension } }
+                new FilePickerFileType("GT+ Guides") { Patterns = new[] { "*." + GuidesPart.FileExtension } }
             },
             DefaultExtension = GuidesPart.FileExtension
         });
@@ -506,7 +508,7 @@ public partial class MainWindow : Window
             AllowMultiple = false,
             FileTypeFilter = new[]
             {
-                new FilePickerFileType("GT++ Guides") { Patterns = new[] { "*." + GuidesPart.FileExtension } },
+                new FilePickerFileType("GT+ Guides") { Patterns = new[] { "*." + GuidesPart.FileExtension } },
                 new FilePickerFileType("All Files")   { Patterns = new[] { "*.*" } }
             }
         });
@@ -1860,7 +1862,7 @@ public partial class MainWindow : Window
     /// <summary>clipboard sequence number when the in-app clipboard was last filled</summary>
     private uint _clipboardSequence;
 
-    /// <summary>Ctrl+V: an image copied outside GT++ since the last in-app copy wins, otherwise the copied elements do; that keeps "copy element, paste element" exact while still letting a screenshot land on the canvas</summary>
+    /// <summary>Ctrl+V: an image copied outside GT+ since the last in-app copy wins, otherwise the copied elements do; that keeps "copy element, paste element" exact while still letting a screenshot land on the canvas</summary>
     private async System.Threading.Tasks.Task DoPasteAsync()
     {
         if (GtCanvas.Document is null) return;
@@ -2059,6 +2061,94 @@ public partial class MainWindow : Window
         var created = new GtStoryboard { Type = type, DataName = dataName };
         pending.Add(created);
         return created;
+    }
+
+    /// <summary>text macro: lays a rectangle over the text element, masked by it, and takes the text itself to 0% opacity; the glyphs then show the rectangle's fill, which is a data field GT can drive (<c>Name.Fill.Color</c>) where the text's own fill is not. Geometry, anchor and rotation are copied so the mask lines up, and the rectangle goes directly above the text so nothing else changes z-order</summary>
+    private void ConvertToDataDrivenColor(GtElement element)
+    {
+        var doc = GtCanvas.Document;
+        if (doc is null) return;
+
+        if (element is not GtTextBlock text)
+        {
+            StatusText.Text = "Convert to Data Driven Color: text element required";
+            return;
+        }
+
+        var layer = FindLayer(doc, text);
+        if (layer is null) return;
+
+        if (layer.Locked || text.Locked)
+        {
+            StatusText.Text = "Convert to Data Driven Color: element is locked";
+            return;
+        }
+
+        var taken = CollectElementNames(doc);
+
+        // the mask is resolved by name, so an unnamed text block gets one before it can be referenced
+        var nameBefore = text.Name;
+        var nameAfter  = string.IsNullOrEmpty(text.Name) ? UniqueName(taken, "TextBox", 1) : text.Name;
+        taken.Add(nameAfter);
+
+        var rectName = nameAfter + "Color";
+        if (taken.Contains(rectName)) rectName = UniqueName(taken, rectName, 2);
+
+        var rect = new GtRectangleElement
+        {
+            Name       = rectName,
+            Location   = text.Location,
+            Dimensions = text.Dimensions,
+            Anchor     = text.Anchor,
+            Z          = text.Z,
+            Depth      = text.Depth,
+            RotateX    = text.RotateX,
+            RotateY    = text.RotateY,
+            RotateZ    = text.RotateZ,
+            MaskObject = nameAfter,
+            // rounded corners would clip glyphs sitting near the box edges
+            Style      = GtRectangleStyle.Square,
+            // the colour the text was painted in, so the macro leaves the picture unchanged
+            Fill       = text.Fill?.Clone()
+                         ?? new GtBrush { Type = GtBrushType.Solid, Color = Avalonia.Media.Colors.White },
+        };
+
+        var opacityBefore = text.Opacity;
+        var index         = layer.Elements.IndexOf(text) + 1;
+
+        void Select(GtElement selected)
+        {
+            LayersPanel.Populate(doc);
+            TimelinePanel.Populate(doc);
+            GtCanvas.SetSelection(selected);
+            GtCanvas.InvalidateVisual();
+        }
+
+        void Apply()
+        {
+            text.Name    = nameAfter;
+            text.Opacity = 0;
+            if (!layer.Elements.Contains(rect))
+                layer.Elements.Insert(Math.Min(index, layer.Elements.Count), rect);
+            Select(rect);
+        }
+
+        void Revert()
+        {
+            layer.Elements.Remove(rect);
+            text.Opacity = opacityBefore;
+            text.Name    = nameBefore;
+            Select(text);
+        }
+
+        Apply();
+
+        _history.Push(new PropertyChangeAction(
+            $"Data driven color for {nameAfter}",
+            undo: Revert,
+            redo: Apply));
+
+        StatusText.Text = $"Added {rectName} masked by {nameAfter}";
     }
 
     private void ReplaceWithText_Click(object? sender, RoutedEventArgs e)

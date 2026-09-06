@@ -814,6 +814,11 @@ public partial class LayersPanelControl : UserControl
         var addSequence = new MenuItem { Header = "Add Image Sequence Animation...", IsVisible = false };
         addSequence.Click += (_, _) => AddSequenceAnimationRequested?.Invoke(element);
 
+        // macros: multi-step edits offered per element type, only text has one so far
+        var macroSeparator = new Separator { IsVisible = false };
+        var dataDrivenColor = new MenuItem { Header = "Convert to Data Driven Color", IsVisible = false };
+        dataDrivenColor.Click += (_, _) => ConvertToDataDrivenColorRequested?.Invoke(element);
+
         var menu = new ContextMenu();
         menu.Items.Add(rename);
         menu.Items.Add(new Separator());
@@ -821,6 +826,8 @@ public partial class LayersPanelControl : UserControl
         menu.Items.Add(delete);
         menu.Items.Add(sequenceSeparator);
         menu.Items.Add(addSequence);
+        menu.Items.Add(macroSeparator);
+        menu.Items.Add(dataDrivenColor);
 
         menu.Opened += (_, _) =>
         {
@@ -838,6 +845,12 @@ public partial class LayersPanelControl : UserControl
             addSequence.IsVisible       = isSequence;
             // greyed rather than hidden while the timeline shows no storyboard: the command exists, it just has nowhere to put the clip yet
             addSequence.IsEnabled       = CanAddSequenceAnimation?.Invoke(element) == true;
+
+            bool isText = element is GtTextBlock;
+            macroSeparator.IsVisible  = isText;
+            dataDrivenColor.IsVisible = isText;
+            // the macro adds an element and rewrites the text, so a lock anywhere in the way stops it
+            dataDrivenColor.IsEnabled = isText && !element.Locked && !layer.Locked;
         };
 
         return menu;
@@ -854,6 +867,9 @@ public partial class LayersPanelControl : UserControl
 
     /// <summary>host hook: add an ImageSequence clip for this element and open the length helper</summary>
     public Action<GtElement>? AddSequenceAnimationRequested { get; set; }
+
+    /// <summary>host hook: run the text macro that puts a mask-driven colour rectangle over this text element; the host owns the document, the naming and the history entry</summary>
+    public Action<GtElement>? ConvertToDataDrivenColorRequested { get; set; }
 
     /// <summary>F2 entry point, returns false when there is nothing to rename</summary>
     public bool BeginRenameFocused()

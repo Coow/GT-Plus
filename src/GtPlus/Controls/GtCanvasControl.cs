@@ -1900,26 +1900,8 @@ public class GtCanvasControl : Control
         // a ticker draws clones of its text not the text itself, and what is on screen depends on the frame, so it masks by its box like a rectangle does
         if (maskEl is GtTextBlock tb && maskEl is not GtTickerElement && !string.IsNullOrEmpty(tb.Text))
         {
-            var bounds   = new Rect(tb.Location.X, tb.Location.Y, tb.Dimensions.Width, tb.Dimensions.Height);
-            var typeface = new Typeface(new FontFamily(tb.FontFamily), tb.FontStyle, tb.FontWeight);
-            var ft       = new FormattedText(tb.Text, CultureInfo.CurrentCulture,
-                               FlowDirection.LeftToRight, typeface, tb.FontSize, Brushes.White);
-
-            double x = tb.TextAlign switch
-            {
-                GtTextAlign.Center => bounds.X + (bounds.Width  - ft.Width)  / 2,
-                GtTextAlign.Right  => bounds.X +  bounds.Width  - ft.Width,
-                _                  => bounds.X
-            };
-            double y = tb.VerticalAlign switch
-            {
-                GtVerticalAlign.Center => bounds.Y + (bounds.Height - ft.Height) / 2,
-                GtVerticalAlign.Bottom => bounds.Y +  bounds.Height - ft.Height,
-                _                      => bounds.Y  // top (default)
-            };
-
-            var geom = ft.BuildGeometry(new Point(x, y));
-            if (geom is not null) return geom;
+            var bounds = new Rect(tb.Location.X, tb.Location.Y, tb.Dimensions.Width, tb.Dimensions.Height);
+            if (BuildTextMaskGeometry(tb, bounds) is { } glyphs) return glyphs;
         }
 
         // ellipse mask: use ellipse geometry
@@ -1935,6 +1917,57 @@ public class GtCanvasControl : Control
             maskEl.Location.X, maskEl.Location.Y,
             maskEl.Dimensions.Width, maskEl.Dimensions.Height));
     }
+
+    /// <summary>glyph outlines for a text mask, laid out through the same pipeline <see cref="RenderTextBlock"/> uses, so line spacing, wrapping, uppercase, the auto-size coercions, the overhang nudge and the stroke all put the mask exactly where the text draws; a one-shot FormattedText cannot do that since GT's LineSpacing divorces the line box from the font's and moves every line including the first (see <see cref="LineBox"/>). Returns null when the block lays out to nothing</summary>
+    private static Geometry? BuildTextMaskGeometry(GtTextBlock tb, Rect bounds)
+    {
+        var text     = tb.Uppercase ? tb.Text.ToUpper() : tb.Text;
+        var typeface = new Typeface(new FontFamily(tb.FontFamily), tb.FontStyle, tb.FontWeight);
+
+        var plan = ResolveTextPlan(tb, text, typeface, bounds);
+        if (LayOutText(text, typeface, tb, plan, bounds, Brushes.White) is not { } laid) return null;
+
+        var glyphs = BuildGlyphGeometry(text, typeface, plan, laid, laid.Offset + StrokeOriginShift(tb));
+        if (glyphs is null) return null;
+
+        // the stroke straddles the outline so half of it paints outside the glyph; without growing by that half a stroked text masks a shape smaller than the one it draws
+        if (tb.Stroke is null || tb.StrokeThickness <= 0) return glyphs;
+
+        var widened = glyphs.GetWidenedGeometry(new Pen(Brushes.White, tb.StrokeThickness));
+        return widened is null
+            ? glyphs
+            : new CombinedGeometry(GeometryCombineMode.Union, glyphs, widened);
+    }
+
+    /// <summary>glyph outlines of an already laid-out block, one geometry per line placed on that line's own baseline so the layout's line spacing and alignment carry over; the fill rule is non-zero because glyphs from neighbouring lines overlap once the spacing pulls them together and an even-odd fill would punch holes where they cross</summary>
+    private static Geometry? BuildGlyphGeometry(string text, Typeface typeface,
+                                                in TextPlan plan, in LaidOutText laid, Vector offset)
+    {
+        var group = new GeometryGroup { FillRule = FillRule.NonZero };
+
+        int count = Math.Min(laid.Lines.Count, laid.Origins.Length);
+        for (int i = 0; i < count; i++)
+        {
+            var line  = laid.Lines[i];
+            var slice = text.Substring(line.FirstTextSourceIndex, line.Length).TrimEnd('\r', '\n');
+            if (slice.Length == 0) continue;
+
+            var ft = new FormattedText(slice, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+                                       typeface, plan.FontSize, Brushes.White);
+
+            // TextLine draws its glyphs line.Baseline below the origin and FormattedText ft.Baseline below its own, so the two are lined up on the baseline rather than on the top edge
+            var origin = laid.Origins[i] + offset + new Vector(0, line.Baseline - ft.Baseline);
+            if (ft.BuildGeometry(origin) is { } geom) group.Children.Add(geom);
+        }
+
+        return group.Children.Count > 0 ? group : null;
+    }
+
+    /// <summary>the half-stroke nudge GT applies to the glyph origin before drawing (DrawGlyphRun moves the baseline origin by strokeWidth/2 on both axes): D2D has no outer-stroke mode so a stroke straddles the outline, and without the shift the left and top halves of it fall outside the object's surface and are clipped away</summary>
+    private static Vector StrokeOriginShift(GtTextBlock tb)
+        => tb.StrokeThickness > 0
+            ? new Vector(tb.StrokeThickness / 2, tb.StrokeThickness / 2)
+            : default;
 
     /// <summary>pushes an in-plane (Z-axis) rotation transform centred on the element bounds (affine, exact); returns null when RotateZ is zero</summary>
     private static IDisposable? PushZRotation(DrawingContext ctx, double rotateZ, Rect bounds)
@@ -2822,25 +2855,21 @@ public class GtCanvasControl : Control
         var plan = ResolveTextPlan(tb, text, typeface, bounds);
         if (LayOutText(text, typeface, tb, plan, bounds, fillBrush) is not { } laid) return;
 
+        // the block is nudged by half the stroke width, as GT's DrawGlyphRun does, so a stroked glyph keeps its outer half instead of losing it off the top-left of the surface
+        var shift = laid.Offset + StrokeOriginShift(tb);
+
         // Fixed does not clip to the layout box; GT clips to the object's own surface which is the element box, so overflowing text is cut there with no ellipsis
         using (ctx.PushClip(new RoundedRect(bounds)))
         {
-            if (tb.Stroke != null && tb.StrokeThickness > 0)
-            {
-                var strokeBrush = MakeBrush(tb.Stroke) ?? new SolidColorBrush(Colors.Black);
-                if (LayOutText(text, typeface, tb, plan, bounds, strokeBrush) is { } stroked)
-                {
-                    for (int dx = -1; dx <= 1; dx++)
-                    for (int dy = -1; dy <= 1; dy++)
-                    {
-                        if (dx == 0 && dy == 0) continue;
-                        DrawLines(ctx, stroked.Lines, laid.Origins,
-                                  laid.Offset + new Vector(dx, dy));
-                    }
-                }
-            }
+            // fill first, then the stroke over the same outline, the order GT draws them in: the inner half of the stroke covers the edge of the fill
+            DrawLines(ctx, laid.Lines, laid.Origins, shift);
 
-            DrawLines(ctx, laid.Lines, laid.Origins, laid.Offset);
+            if (tb.Stroke is not null && tb.StrokeThickness > 0 &&
+                MakePen(tb.Stroke, tb.StrokeThickness) is { } pen &&
+                BuildGlyphGeometry(text, typeface, plan, laid, shift) is { } glyphs)
+            {
+                ctx.DrawGeometry(null, pen, glyphs);
+            }
         }
     }
 
