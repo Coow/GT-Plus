@@ -1437,7 +1437,7 @@ public partial class MainWindow : Window
             var storyboards = document.Storyboards.Count > 0
                 ? $"  ·  {document.Storyboards.Count} storyboard(s)" : "";
             StatusText.Text = $"{filename}  ·  {document.Layers.Count} layers  ·  {document.Width}×{document.Height}{storyboards}";
-            Title = $"vMix GT++ -  {filename}";
+            Title = $"GT+ -  {filename}";
 
             _recent.Add(path);
             Avalonia.Threading.Dispatcher.UIThread.Post(RebuildFileMenu, Avalonia.Threading.DispatcherPriority.Background);
@@ -1566,7 +1566,7 @@ public partial class MainWindow : Window
         if (SaveToPath(path))
         {
             _currentPath = path;
-            Title = $"vMix GT++  -  {Path.GetFileName(path)}";
+            Title = $"vMix GT+  -  {Path.GetFileName(path)}";
             _recent.Add(path);
             RebuildFileMenu();
         }
@@ -1705,7 +1705,7 @@ public partial class MainWindow : Window
         UpdateRulerSelection();
 
         StatusText.Text = $"New document  ·  {width}×{height}";
-        Title = "vMix GT++  -  (new)";
+        Title = "vMix GT+  -  (new)";
         Avalonia.Threading.Dispatcher.UIThread.Post(RebuildFileMenu, Avalonia.Threading.DispatcherPriority.Background);
     }
 

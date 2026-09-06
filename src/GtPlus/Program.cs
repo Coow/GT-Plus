@@ -10,9 +10,9 @@ sealed class Program
     public static void Main(string[] args)
     {
         Logger.Init();
-        Logger.Info($"vMix GT++ starting - PID {Environment.ProcessId}");
+        Logger.Info($"GT+ starting - PID {Environment.ProcessId}");
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
-        Logger.Info("vMix GT++ exiting");
+        Logger.Info("GT+ exiting");
     }
 
     public static AppBuilder BuildAvaloniaApp()
