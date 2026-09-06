@@ -7,8 +7,11 @@
     self-contained single-file build for each runtime identifier into
     dist/<version>/<rid>/. The executable is renamed to GTPlus-<version>.
 
-    version.json is only written back after every platform has built
-    successfully, so a failed build does not consume a version number.
+    version.json is stamped with the new version *before* publishing, because
+    it ships inside the app as an Avalonia resource and is what the About
+    window and the update check report. If any platform fails to build the
+    file is restored to its previous contents, so a failed build still does
+    not consume a version number.
 
 .PARAMETER Bump
     Which part of the semantic version to increase: Major, Minor, Patch or None.
@@ -104,6 +107,25 @@ else {
 
 Write-Step "Building GT Plus $version ($Configuration) - previous version was $current"
 
+# --- Stamp version.json before publishing ------------------------------------
+# It is embedded as an AvaloniaResource, so it has to hold the new version by
+# the time dotnet publish runs. Kept so it can be put back if a build fails.
+
+$previousVersionFile = if (Test-Path $VersionFile) { Get-Content $VersionFile -Raw } else { $null }
+
+function Restore-VersionFile {
+    if ($null -ne $previousVersionFile) {
+        Set-Content $VersionFile $previousVersionFile -Encoding utf8 -NoNewline
+    }
+    elseif (Test-Path $VersionFile) {
+        Remove-Item $VersionFile -Force
+    }
+}
+
+@{ version = $version } | ConvertTo-Json | Set-Content $VersionFile -Encoding utf8
+
+try {
+
 # --- Publish each platform ---------------------------------------------------
 
 $outputRoot = Join-Path $DistRoot $version
@@ -183,9 +205,12 @@ if (-not $NoArchive) {
     }
 }
 
-# --- Persist the version only after everything succeeded ---------------------
-
-@{ version = $version } | ConvertTo-Json | Set-Content $VersionFile -Encoding utf8
+}
+catch {
+    # Nothing shipped, so the version number is not consumed.
+    Restore-VersionFile
+    throw
+}
 
 Write-Host ''
 Write-Step "GT Plus $version built to $outputRoot"

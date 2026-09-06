@@ -1914,8 +1914,8 @@ public class GtCanvasControl : Control
             double y = tb.VerticalAlign switch
             {
                 GtVerticalAlign.Center => bounds.Y + (bounds.Height - ft.Height) / 2,
-                GtVerticalAlign.Top    => bounds.Y +  bounds.Height - ft.Height,
-                _                      => bounds.Y  // bottom (default)
+                GtVerticalAlign.Bottom => bounds.Y +  bounds.Height - ft.Height,
+                _                      => bounds.Y  // top (default)
             };
 
             var geom = ft.BuildGeometry(new Point(x, y));
