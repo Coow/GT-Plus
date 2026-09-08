@@ -35,6 +35,8 @@
                                      HorizontalContentAlignment="Right"/>
                             <ButtonSpinner x:Name="PART_Spinner"
                                            Grid.Column="1"
+                                           IsTabStop="False"
+                                           Focusable="False"
                                            Background="Transparent"
                                            BorderThickness="0"
                                            MinWidth="0"
@@ -52,12 +54,18 @@
             <Setter Property="MinHeight" Value="0"/>
             <Setter Property="MinWidth" Value="0"/>
             <Setter Property="Padding" Value="0"/>
+            <!-- the spinner and its arrows are mouse-only: Tab has to walk box to box, not stop on them -->
+            <Setter Property="IsTabStop" Value="False"/>
+            <Setter Property="Focusable" Value="False"/>
             <Setter Property="Template">
                 <ControlTemplate>
                     <Grid RowDefinitions="*,*" Width="16">
+                        <!-- IsTabStop=False: Tab walks box to box, it must not stop on the ▲▼ buttons on the way -->
                         <RepeatButton x:Name="PART_IncreaseButton"
                                       Grid.Row="0"
                                       Content="▲"
+                                      IsTabStop="False"
+                                      Focusable="False"
                                       FontSize="7"
                                       MinWidth="0"
                                       MinHeight="0"
@@ -71,6 +79,8 @@
                         <RepeatButton x:Name="PART_DecreaseButton"
                                       Grid.Row="1"
                                       Content="▼"
+                                      IsTabStop="False"
+                                      Focusable="False"
                                       FontSize="7"
                                       MinWidth="0"
                                       MinHeight="0"
@@ -532,6 +542,54 @@
                                           FontSize="11" HorizontalAlignment="Stretch"
                                           VerticalAlignment="Center"
                                           SelectionChanged="ImageSizeModeBox_SelectionChanged"/>
+                            </Grid>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- web page reference (GtWebElement only) -->
+                    <Grid x:Name="WebPanel" IsVisible="False" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">
+                            <Border Width="1" Background="#444444"
+                                    VerticalAlignment="Stretch" Margin="5,0"/>
+
+                            <Grid ColumnDefinitions="Auto,220,Auto" RowDefinitions="Auto,Auto"
+                                  VerticalAlignment="Center">
+
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="URL"
+                                           FontSize="11" Foreground="#888888"
+                                           VerticalAlignment="Center" Margin="0,0,4,3"/>
+                                <TextBox Grid.Row="0" Grid.Column="1"
+                                         x:Name="WebUrlBox"
+                                         FontSize="11" Padding="4,1" Margin="0,0,0,3"
+                                         VerticalAlignment="Center"
+                                         Watermark="https://…"
+                                         ToolTip.Tip="Page to capture. Design-time reference only - a web object is never written to the .gtzip and never appears in a video export"
+                                         KeyDown="WebUrlBox_KeyDown"
+                                         LostFocus="WebUrlBox_LostFocus"/>
+                                <Button Grid.Row="0" Grid.Column="2"
+                                        x:Name="WebReloadButton"
+                                        FontSize="11" Padding="8,1" Margin="4,0,0,3"
+                                        VerticalAlignment="Center"
+                                        ToolTip.Tip="Capture the page again now"
+                                        Content="Reload"
+                                        Click="WebReloadButton_Click"/>
+
+                                <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
+                                            Orientation="Horizontal" Spacing="10"
+                                            VerticalAlignment="Center">
+                                    <CheckBox x:Name="WebInteractiveCheck"
+                                              FontSize="11"
+                                              VerticalAlignment="Center"
+                                              ToolTip.Tip="Click, scroll and type into the page. While this is on the box cannot be selected or dragged by clicking it - hold Alt for that, or press Escape to give the keyboard back"
+                                              Content="Interactive"
+                                              IsCheckedChanged="WebInteractiveCheck_Changed"/>
+                                    <CheckBox x:Name="WebTransparentCheck"
+                                              FontSize="11"
+                                              VerticalAlignment="Center"
+                                              ToolTip.Tip="Render over a transparent page background instead of white"
+                                              Content="Transparent"
+                                              IsCheckedChanged="WebTransparentCheck_Changed"/>
+                                </StackPanel>
                             </Grid>
                         </StackPanel>
                     </Grid>

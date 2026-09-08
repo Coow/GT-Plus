@@ -218,6 +218,9 @@ public abstract class GtElement
     /// <summary>deep copy of every property including brushes and crop; <see cref="Name"/> is copied verbatim, so callers that add the copy to a document must give it a unique name and clone the animations targeting the original separately (they live on the storyboards)</summary>
     public abstract GtElement Clone();
 
+    /// <summary>copies every base property from one element to another of any type; used where an element has to be rebuilt as a different class and keep its geometry, such as the carrier objects a web page travels in (see <see cref="Services.WebPagePart"/>)</summary>
+    public static void CopyBase(GtElement from, GtElement to) => from.CopyBaseTo(to);
+
     protected void CopyBaseTo(GtElement target)
     {
         target.Name       = Name;
@@ -430,6 +433,30 @@ public class GtImageElement : GtElement
             BitmapSource     = BitmapSource,
             SequencePosition = SequencePosition,
             SizeMode         = SizeMode,
+        };
+        CopyBaseTo(copy);
+        return copy;
+    }
+}
+
+/// <summary>a live web page drawn on the canvas as a design reference. GT Title Designer has no browser object, so the page is saved as a carrier object it does understand (see <see cref="Services.WebPagePart"/>) and comes back when the file is reopened here, while vMix only ever sees a rectangle that draws nothing. It stays out of video exports, which have to match what vMix will play. The page itself runs in a headless browser that streams itself frame by frame, see <see cref="Services.WebPreviewService"/></summary>
+public class GtWebElement : GtElement
+{
+    public string Url { get; set; } = "";
+
+    /// <summary>forward clicks, scrolling and typing to the page instead of treating the box as artwork; off by default because while it is on the box cannot be selected or dragged by clicking it (hold Alt for that)</summary>
+    public bool Interactive { get; set; }
+
+    /// <summary>render over a transparent page background instead of the browser's white, so a page that sets no background of its own lets the artwork underneath show through</summary>
+    public bool TransparentBackground { get; set; } = true;
+
+    public override GtElement Clone()
+    {
+        var copy = new GtWebElement
+        {
+            Url                   = Url,
+            Interactive           = Interactive,
+            TransparentBackground = TransparentBackground,
         };
         CopyBaseTo(copy);
         return copy;

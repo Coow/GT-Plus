@@ -434,6 +434,7 @@ public partial class LayersPanelControl : UserControl
             GtImageElement     => "I",
             GtRectangleElement => "R",
             GtEllipseElement   => "E",
+            GtWebElement       => "W",
             _                  => "?"
         };
 

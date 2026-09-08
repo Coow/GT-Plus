@@ -132,6 +132,9 @@ public class GtZipReader
         if (!GuidesPart.ExtractCarrier(document) && document.Guides.Count == 0)
             GuidesPart.Read(zip, document);
 
+        // web pages ride in carrier objects of their own, turned back into real elements before anything else sees the document
+        WebPagePart.ExtractCarriers(document);
+
         Logger.Info($"Parsed: {document.Width}x{document.Height}, {document.Layers.Count} layers");
         foreach (var layer in document.Layers)
             Logger.Debug($"  layer '{layer.Name}': {layer.Elements.Count} elements at ({layer.Location.X},{layer.Location.Y})");

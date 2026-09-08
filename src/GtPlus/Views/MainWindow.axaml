@@ -362,6 +362,23 @@
                     </Panel>
                 </Button>
 
+                <Separator Height="1" Background="#333333" Margin="4,2" />
+
+                <ToggleButton x:Name="WebToolButton"
+                              IsChecked="False"
+                              ToolTip.Tip="Web Page (W) - Click for a page filling the canvas, or drag a box"
+                              Padding="7,7"
+                              Click="WebToolButton_Click">
+                    <Panel Width="16" Height="16">
+                        <Path Fill="#cccccc" Stretch="None"
+                              Data="F1 M 8,0 A 8,8 0 1 0 8,16 A 8,8 0 1 0 8,0 Z M 8,1.5 A 6.5,6.5 0 1 1 8,14.5 A 6.5,6.5 0 1 1 8,1.5 Z" />
+                        <Path Fill="#cccccc" Stretch="None"
+                              Data="M 1.5,7.5 L 14.5,7.5 L 14.5,8.5 L 1.5,8.5 Z" />
+                        <Path Fill="#cccccc" Stretch="None"
+                              Data="F1 M 8,0.5 A 3.4,7.5 0 1 0 8,15.5 A 3.4,7.5 0 1 0 8,0.5 Z M 8,1.5 A 2.4,6.5 0 1 1 8,14.5 A 2.4,6.5 0 1 1 8,1.5 Z" />
+                    </Panel>
+                </ToggleButton>
+
             </StackPanel>
         </Border>
 

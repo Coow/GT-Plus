@@ -47,6 +47,9 @@ public partial class PropertiesPanelControl : UserControl
     /// <summary>fires when the user changes any property, caller should InvalidateVisual on canvas</summary>
     public event EventHandler? ElementChanged;
 
+    /// <summary>fires when the user asks for a web page to be captured again; the host owns the preview service so it does the reload</summary>
+    public event EventHandler<GtWebElement>? WebReloadRequested;
+
     /// <summary>fires when the user clicks Browse on an image; the host owns the asset library and the file picker, so it does the swap (and the history entry) for the element passed here</summary>
     public event EventHandler<GtImageElement>? ImageSourceBrowseRequested;
 
@@ -313,6 +316,9 @@ public partial class PropertiesPanelControl : UserControl
         DataFlagsPanel.IsVisible    = el is not null;
         ImagePanel.IsVisible        = allImages;
 
+        var allWeb     = _allElements.Count > 0 && _allElements.All(e => e is GtWebElement);
+        WebPanel.IsVisible = allWeb;
+
         var allTickers = _allElements.Count > 0 && _allElements.All(e => e is GtTickerElement);
         TickerPanel.IsVisible = allTickers;
         AutoSizePanel.IsVisible = allText && !_allElements.Any(e => e is GtTickerElement);
@@ -382,6 +388,13 @@ public partial class PropertiesPanelControl : UserControl
 
             if (el is GtImageElement img)
                 ImageSizeModeBox.SelectedIndex = (int)img.SizeMode;
+
+            if (el is GtWebElement web)
+            {
+                WebUrlBox.Text                = web.Url;
+                WebInteractiveCheck.IsChecked = web.Interactive;
+                WebTransparentCheck.IsChecked = web.TransparentBackground;
+            }
 
             if (el is GtTickerElement ticker)
             {
@@ -1649,6 +1662,69 @@ public partial class PropertiesPanelControl : UserControl
                                   "Bottom Left", "Bottom Center", "Bottom Right" })
             AnchorBox.Items.Add(s);
         AnchorBox.SelectedIndex = (int)GtAnchor.TopLeft;
+    }
+
+    private IReadOnlyList<GtWebElement> AllWebs => _allElements.OfType<GtWebElement>().ToList();
+
+    private void WebUrlBox_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter && e.Key != Key.Return) return;
+        ApplyWebUrl();
+        e.Handled = true;
+    }
+
+    private void WebUrlBox_LostFocus(object? sender, RoutedEventArgs e) => ApplyWebUrl();
+
+    /// <summary>a url is committed on Enter or on leaving the box, not per keystroke - every commit costs a browser launch</summary>
+    private void ApplyWebUrl()
+    {
+        if (_updating) return;
+        var url  = (WebUrlBox.Text ?? "").Trim();
+        var webs = AllWebs;
+        if (webs.Count == 0) return;
+
+        var befores = webs.Select(w => (w, w.Url)).ToList();
+        if (befores.All(x => string.Equals(x.Url, url, StringComparison.Ordinal))) return;
+
+        foreach (var w in webs) w.Url = url;
+        PushHistory("Web page URL",
+            () => { foreach (var (w, b) in befores) w.Url = b; },
+            () => { foreach (var w in webs) w.Url = url; });
+        Apply();
+    }
+
+    private void WebInteractiveCheck_Changed(object? sender, RoutedEventArgs e)
+    {
+        if (_updating) return;
+        var interactive = WebInteractiveCheck.IsChecked == true;
+        var webs        = AllWebs;
+        var befores     = webs.Select(w => (w, w.Interactive)).ToList();
+        foreach (var w in webs) w.Interactive = interactive;
+        if (befores.Any(x => x.Interactive != interactive))
+            PushHistory("Web page input",
+                () => { foreach (var (w, b) in befores) w.Interactive = b; },
+                () => { foreach (var w in webs) w.Interactive = interactive; });
+        Apply();
+    }
+
+    private void WebTransparentCheck_Changed(object? sender, RoutedEventArgs e)
+    {
+        if (_updating) return;
+        var transparent = WebTransparentCheck.IsChecked == true;
+        var webs        = AllWebs;
+        var befores     = webs.Select(w => (w, w.TransparentBackground)).ToList();
+        foreach (var w in webs) w.TransparentBackground = transparent;
+        if (befores.Any(x => x.TransparentBackground != transparent))
+            PushHistory("Web page background",
+                () => { foreach (var (w, b) in befores) w.TransparentBackground = b; },
+                () => { foreach (var w in webs) w.TransparentBackground = transparent; });
+        Apply();
+    }
+
+    private void WebReloadButton_Click(object? sender, RoutedEventArgs e)
+    {
+        ApplyWebUrl();
+        foreach (var w in AllWebs) WebReloadRequested?.Invoke(this, w);
     }
 
     private void ImageBrowseButton_Click(object? sender, RoutedEventArgs e)

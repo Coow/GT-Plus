@@ -51,6 +51,8 @@ public static class GuidesPart
             Opacity         = 0,
             Locked          = true,
             StrokeThickness = 0,
+            // explicitly hidden from the vMix title editor; a flagless shape already behaves that way at playout, but saying so keeps the carrier out of the field list GT itself shows
+            DataFlags       = GtDataFlags.Hidden,
             Fill            = new GtBrush
             {
                 Type  = GtBrushType.Solid,

@@ -28,6 +28,7 @@ public partial class MainWindow : Window
     private readonly RecentFilesService _recent = new();
     private readonly PreferencesService _prefs = new();
     private readonly HistoryService _history = new();
+    private readonly WebPreviewService _webPreviews = new();
 
     private string? _currentPath;
     private GtAssetLibrary _currentAssets = new();
@@ -76,6 +77,8 @@ public partial class MainWindow : Window
 
         GtCanvas.SelectionChanged += OnSelectionChanged;
         GtCanvas.AutoSizeApplied  += (_, _) => PropertiesPanel.RefreshDimensions();
+        // live drag feedback: the boxes follow the element instead of jumping on pointer release
+        GtCanvas.TransformLive    += (_, _) => { PropertiesPanel.RefreshDimensions(); UpdateDebugPanel(); };
 
         PropertiesPanel.ElementChanged += (_, _) => { GtCanvas.InvalidateVisual(); UpdateDebugPanel(); };
         PropertiesPanel.ImageSourceBrowseRequested += async (_, img) => await ReplaceImageSourceAsync(img);
@@ -94,6 +97,10 @@ public partial class MainWindow : Window
 
         GtCanvas.History = _history;
         GtCanvas.DrawCompleted += OnCanvasDrawCompleted;
+
+        _webPreviews.PreferredBrowserPath = _prefs.ChromiumPath;
+        GtCanvas.WebPreviews = _webPreviews;
+        PropertiesPanel.WebReloadRequested += (_, web) => _ = ReloadWebPreviewAsync(web);
 
         TimelinePanel.History = _history;
         TimelinePanel.Canvas  = GtCanvas;
@@ -212,6 +219,7 @@ public partial class MainWindow : Window
     {
         base.OnClosing(e);
         SaveWindowGeometry();
+        if (_forceClose || !IsDirty) _webPreviews.Dispose();
 
         if (_forceClose || !IsDirty) return;
         e.Cancel = true;
@@ -732,6 +740,7 @@ public partial class MainWindow : Window
     private void TextBoxToolButton_Click(object? sender, RoutedEventArgs e)   => SetTool(CanvasTool.TextBox);
     private void RectangleToolButton_Click(object? sender, RoutedEventArgs e) => SetTool(CanvasTool.Rectangle);
     private void TickerToolButton_Click(object? sender, RoutedEventArgs e)    => SetTool(CanvasTool.Ticker);
+    private void WebToolButton_Click(object? sender, RoutedEventArgs e)       => SetTool(CanvasTool.Web);
     private void ImageToolButton_Click(object? sender, RoutedEventArgs e)     => _ = InsertImageAsync();
     private void ImageSequenceFromFiles_Click(object? sender, RoutedEventArgs e)  => _ = InsertImageSequenceAsync(fromFolder: false);
     private void ImageSequenceFromFolder_Click(object? sender, RoutedEventArgs e) => _ = InsertImageSequenceAsync(fromFolder: true);
@@ -746,11 +755,16 @@ public partial class MainWindow : Window
         TextBoxToolButton.IsChecked   = tool == CanvasTool.TextBox;
         RectangleToolButton.IsChecked = tool == CanvasTool.Rectangle;
         TickerToolButton.IsChecked    = tool == CanvasTool.Ticker;
+        WebToolButton.IsChecked       = tool == CanvasTool.Web;
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
+
+        // while an interactive web page holds the keyboard, a bare letter is text for the page and not a tool shortcut
+        if (GtCanvas.WebInputFocused && e.KeyModifiers == KeyModifiers.None) return;
+
         switch (e.Key)
         {
             case Key.S when e.KeyModifiers == KeyModifiers.None && e.Source is not TextBox:
@@ -771,6 +785,10 @@ public partial class MainWindow : Window
                 break;
             case Key.K when e.KeyModifiers == KeyModifiers.None && e.Source is not TextBox:
                 SetTool(CanvasTool.Ticker);
+                e.Handled = true;
+                break;
+            case Key.W when e.KeyModifiers == KeyModifiers.None && e.Source is not TextBox:
+                SetTool(CanvasTool.Web);
                 e.Handled = true;
                 break;
             case Key.I when e.KeyModifiers == KeyModifiers.None && e.Source is not TextBox:
@@ -1603,7 +1621,12 @@ public partial class MainWindow : Window
         {
             _writer.Write(path, doc, _currentAssets);
             MarkClean();
-            StatusText.Text = $"Saved  ·  {Path.GetFileName(path)}";
+
+            // a web page comes back when this editor reopens the file, but vMix sees only the empty carrier object it is stored as, so say so rather than let that be a surprise on air
+            int webCount = doc.Layers.Sum(l => l.Elements.Count(el => el is GtWebElement));
+            StatusText.Text = webCount == 0
+                ? $"Saved  ·  {Path.GetFileName(path)}"
+                : $"Saved  ·  {Path.GetFileName(path)}  ·  {webCount} web page{(webCount == 1 ? "" : "s")} stored for GT+ only";
             return true;
         }
         catch (Exception ex)
@@ -1764,6 +1787,15 @@ public partial class MainWindow : Window
                 FontFamily = "Arial",
                 FontSize   = 36,
                 Fill       = new GtBrush { Type = GtBrushType.Solid, Color = Avalonia.Media.Colors.White },
+            };
+        }
+        else if (GtCanvas.ActiveTool == CanvasTool.Web)
+        {
+            element = new GtWebElement
+            {
+                Name       = GenerateElementName(doc, "WebPage"),
+                Location   = new GtPoint(docRect.X - layer.Location.X, docRect.Y - layer.Location.Y),
+                Dimensions = new GtSize(docRect.Width, docRect.Height),
             };
         }
         else
@@ -2298,6 +2330,30 @@ public partial class MainWindow : Window
     };
 
     /// <summary>shows the image file picker, returns the chosen local path or null</summary>
+    /// <summary>captures a web page again; the first thing needed is a browser, so when none was found the user is asked to point at one and the answer is remembered in preferences</summary>
+    private async System.Threading.Tasks.Task ReloadWebPreviewAsync(GtWebElement web)
+    {
+        if (_webPreviews.BrowserMissing)
+        {
+            StatusText.Text = "No Chrome, Edge or Chromium found - pick the browser executable";
+
+            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title         = "Locate Chrome, Edge or Chromium",
+                AllowMultiple = false,
+            });
+
+            var picked = files.Count == 0 ? null : files[0].TryGetLocalPath();
+            if (picked is null) return;
+
+            _prefs.ChromiumPath = picked;
+            _prefs.Save();
+            _webPreviews.PreferredBrowserPath = picked;
+        }
+
+        _webPreviews.Reload(web);
+    }
+
     private async System.Threading.Tasks.Task<string?> PickImageFileAsync(string title)
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions

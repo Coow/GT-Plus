@@ -22,7 +22,7 @@ using GtPlus.Services;
 
 namespace GtPlus.Controls;
 
-public enum CanvasTool  { Select, Edit, TextBox, Rectangle, Ticker }
+public enum CanvasTool  { Select, Edit, TextBox, Rectangle, Ticker, Web }
 public enum ResizeHandle { None, NW, N, NE, E, SE, S, SW, W }
 
 /// <summary>custom control that renders a GtDocument onto an Avalonia DrawingContext; supports element selection (click, shift+click, ctrl+drag-box) and per-element outside-canvas opacity dimming</summary>
@@ -32,6 +32,9 @@ public class GtCanvasControl : Control
     {
         // double-clicking a guide is how Photoshop opens it for a precise, typed position
         AddHandler(InputElement.DoubleTappedEvent, OnCanvasDoubleTapped, RoutingStrategies.Bubble);
+
+        // an interactive web element is typed into, and keys only arrive at a control that can hold focus
+        Focusable = true;
     }
 
     private void OnCanvasDoubleTapped(object? sender, TappedEventArgs e)
@@ -46,6 +49,10 @@ public class GtCanvasControl : Control
         e.Handled = true;
     }
 
+    /// <summary>tools that create an element by dragging a box out on the canvas</summary>
+    private static bool IsDrawTool(CanvasTool tool) =>
+        tool is CanvasTool.TextBox or CanvasTool.Rectangle or CanvasTool.Ticker or CanvasTool.Web;
+
     private GtDocument? _document;
     private GtAssetLibrary _assets = new();
     private readonly Dictionary<string, Bitmap?> _bitmapCache = new(StringComparer.OrdinalIgnoreCase);
@@ -55,6 +62,86 @@ public class GtCanvasControl : Control
     private const int SequenceCacheLimit = 12;
     private readonly Dictionary<string, Bitmap?> _sequenceCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly Queue<string> _sequenceCacheOrder = new();
+
+    private WebPreviewService? _webPreviews;
+
+    /// <summary>supplies the captured stills for <see cref="GtWebElement"/>s; leave null and web elements draw as an empty placeholder box</summary>
+    public WebPreviewService? WebPreviews
+    {
+        get => _webPreviews;
+        set
+        {
+            if (ReferenceEquals(_webPreviews, value)) return;
+            if (_webPreviews is not null) _webPreviews.Changed -= OnWebPreviewChanged;
+            _webPreviews = value;
+            if (_webPreviews is not null)
+            {
+                _webPreviews.Changed += OnWebPreviewChanged;
+                _webPreviews.Document = _document;
+            }
+            InvalidateVisual();
+        }
+    }
+
+    private void OnWebPreviewChanged(object? sender, EventArgs e) => InvalidateVisual();
+
+    /// <summary>the interactive web element keystrokes are going to, null when the editor has the keyboard</summary>
+    private GtWebElement? _webFocus;
+    private bool _webPointerDown;
+
+    /// <summary>true while an interactive page holds the keyboard, so the editor's single-key shortcuts stay out of the way of typing into it</summary>
+    public bool WebInputFocused => _webFocus is not null;
+
+    /// <summary>topmost interactive web element under the point, with the layer it lives in</summary>
+    private (GtLayer? Layer, GtWebElement? Web) HitTestInteractiveWeb(Point docPoint)
+    {
+        if (_document is null) return (null, null);
+
+        var layers = _document.Layers;
+        for (int li = layers.Count - 1; li >= 0; li--)
+        {
+            var layer = layers[li];
+            if (!layer.Visible) continue;
+
+            var elements = layer.Elements;
+            for (int ei = elements.Count - 1; ei >= 0; ei--)
+            {
+                if (elements[ei] is not GtWebElement web) continue;
+                if (!web.Visible || !web.Interactive) continue;
+                if (ElementAbsBounds(layer, web).Contains(docPoint)) return (layer, web);
+            }
+        }
+        return (null, null);
+    }
+
+    private GtLayer? LayerOf(GtElement element)
+    {
+        if (_document is null) return null;
+        foreach (var layer in _document.Layers)
+            if (layer.Elements.Contains(element)) return layer;
+        return null;
+    }
+
+    /// <summary>document point expressed in the page's own coordinates; the page is laid out at the element's pixel size so the offset into the box is the offset into the page</summary>
+    private static Point WebLocal(GtLayer layer, GtWebElement web, Point docPoint)
+    {
+        var bounds = ElementAbsBounds(layer, web);
+        return new Point(docPoint.X - bounds.X, docPoint.Y - bounds.Y);
+    }
+
+    private static int CdpModifiers(KeyModifiers modifiers) => WebPreviewService.Modifiers(
+        modifiers.HasFlag(KeyModifiers.Alt),
+        modifiers.HasFlag(KeyModifiers.Control),
+        modifiers.HasFlag(KeyModifiers.Meta),
+        modifiers.HasFlag(KeyModifiers.Shift));
+
+    /// <summary>drops the keyboard back to the editor</summary>
+    private void ClearWebFocus()
+    {
+        if (_webFocus is null) return;
+        _webFocus = null;
+        InvalidateVisual();
+    }
 
     private readonly HashSet<GtElement> _selectedElements = new(ReferenceEqualityComparer.Instance);
 
@@ -105,6 +192,9 @@ public class GtCanvasControl : Control
 
     /// <summary>fires after the render pass has moved an element on its own (an auto-sizing text box resizing itself, or a bound element following its source) so the toolbar can pick up the new box; raised off the render pass, never during it</summary>
     public event EventHandler? AutoSizeApplied;
+
+    /// <summary>fires on every pointer step of a move or resize drag so the toolbar boxes track the element live instead of only catching up on pointer release</summary>
+    public event EventHandler? TransformLive;
 
     public IReadOnlyCollection<GtElement> SelectedElements => _selectedElements;
 
@@ -563,9 +653,7 @@ public class GtCanvasControl : Control
             _isDrawing    = false;
             _activeHandle  = ResizeHandle.None;
             var t = (CanvasTool)change.NewValue!;
-            Cursor = (t == CanvasTool.TextBox || t == CanvasTool.Rectangle || t == CanvasTool.Ticker)
-                ? new Cursor(StandardCursorType.Cross)
-                : Cursor.Default;
+            Cursor = IsDrawTool(t) ? new Cursor(StandardCursorType.Cross) : Cursor.Default;
             InvalidateVisual();
         }
     }
@@ -587,6 +675,7 @@ public class GtCanvasControl : Control
             _bitmapCache.Clear();
             ClearSequenceCache();
             ClearCropMasks();
+            if (_webPreviews is not null) _webPreviews.Document = value;
             _animationFrame = null;
             _selectedElements.Clear();
             _selectedLayer = null;
@@ -760,8 +849,7 @@ public class GtCanvasControl : Control
         var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         var alt   = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
 
-        if (!IsPreviewing && (ActiveTool == CanvasTool.TextBox || ActiveTool == CanvasTool.Rectangle
-                              || ActiveTool == CanvasTool.Ticker))
+        if (!IsPreviewing && IsDrawTool(ActiveTool))
         {
             _isDrawing   = true;
             _drawStart   = docPt;
@@ -779,6 +867,27 @@ public class GtCanvasControl : Control
             e.Handled = true;
             return;
         }
+
+        // an interactive page takes the click itself; Alt is the way through to selecting and moving the box, as it is for the Edit tool.
+        // a resize handle still wins, since handles sit half inside the box they belong to and would otherwise be unusable while the page is live
+        if (!IsPreviewing && !alt && _webPreviews is not null &&
+            HitTestHandle(docPt) == ResizeHandle.None &&
+            HitTestLayerHandle(docPt) == ResizeHandle.None &&
+            HitTestInteractiveWeb(docPt) is ({ } webLayer, { } web))
+        {
+            _webFocus       = web;
+            _webPointerDown = true;
+            Focus();
+            _webPreviews.SendMouse(web, "mousePressed", WebLocal(webLayer, web, docPt),
+                                   "left", (int)e.ClickCount, CdpModifiers(e.KeyModifiers));
+            e.Pointer.Capture(this);
+            e.Handled = true;
+            InvalidateVisual();
+            return;
+        }
+
+        // a click anywhere else is the page losing the keyboard
+        ClearWebFocus();
 
         // previewing falls back to selection for every tool: the model geometry the handles and drags work against is not where the objects are being drawn
         bool useSelect = IsPreviewing || ActiveTool == CanvasTool.Select ||
@@ -867,11 +976,112 @@ public class GtCanvasControl : Control
         e.Handled = true;
     }
 
+    protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
+    {
+        base.OnPointerWheelChanged(e);
+
+        // Ctrl+wheel is the editor's zoom whatever is under the pointer, everything else scrolls the page it is over
+        if (IsPreviewing || _webPreviews is null || e.Handled) return;
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Alt)) return;
+
+        var docPt = ToDocPoint(e.GetPosition(this));
+        if (HitTestInteractiveWeb(docPt) is not ({ } layer, { } web)) return;
+
+        // one wheel notch is 120 units to a browser, and the axes are inverted against Avalonia's
+        _webPreviews.SendWheel(web, WebLocal(layer, web, docPt),
+                               -e.Delta.X * WheelNotch, -e.Delta.Y * WheelNotch,
+                               CdpModifiers(e.KeyModifiers));
+        e.Handled = true;
+    }
+
+    /// <summary>scroll distance a browser expects for one wheel notch</summary>
+    private const double WheelNotch = 120;
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+
+        if (_webFocus is not { } web || _webPreviews is null) return;
+
+        // Escape is how the keyboard is handed back to the editor, so it is never forwarded
+        if (e.Key == Key.Escape)
+        {
+            ClearWebFocus();
+            e.Handled = true;
+            return;
+        }
+
+        var (key, code, vk) = MapKey(e.Key);
+        // a printable key arrives again as text input, which is what actually types it; this pass is what page shortcuts and editing keys listen for
+        _webPreviews.SendKey(web, "rawKeyDown", null, key, code, vk, CdpModifiers(e.KeyModifiers));
+        e.Handled = true;
+    }
+
+    protected override void OnKeyUp(KeyEventArgs e)
+    {
+        base.OnKeyUp(e);
+
+        if (_webFocus is not { } web || _webPreviews is null) return;
+
+        var (key, code, vk) = MapKey(e.Key);
+        _webPreviews.SendKey(web, "keyUp", null, key, code, vk, CdpModifiers(e.KeyModifiers));
+        e.Handled = true;
+    }
+
+    protected override void OnTextInput(TextInputEventArgs e)
+    {
+        base.OnTextInput(e);
+
+        if (_webFocus is not { } web || _webPreviews is null) return;
+        if (string.IsNullOrEmpty(e.Text)) return;
+
+        _webPreviews.SendKey(web, "char", e.Text, e.Text, "", 0, 0);
+        e.Handled = true;
+    }
+
+    /// <summary>DOM key name, physical code and Windows virtual key code for the keys a page cares about beyond plain typing, which arrives as text input instead</summary>
+    private static (string Key, string Code, int Vk) MapKey(Key key) => key switch
+    {
+        Key.Back      => ("Backspace", "Backspace", 8),
+        Key.Tab       => ("Tab",       "Tab",       9),
+        Key.Enter     => ("Enter",     "Enter",     13),
+        Key.Escape    => ("Escape",    "Escape",    27),
+        Key.Space     => (" ",         "Space",     32),
+        Key.PageUp    => ("PageUp",    "PageUp",    33),
+        Key.PageDown  => ("PageDown",  "PageDown",  34),
+        Key.End       => ("End",       "End",       35),
+        Key.Home      => ("Home",      "Home",      36),
+        Key.Left      => ("ArrowLeft", "ArrowLeft", 37),
+        Key.Up        => ("ArrowUp",   "ArrowUp",   38),
+        Key.Right     => ("ArrowRight","ArrowRight",39),
+        Key.Down      => ("ArrowDown", "ArrowDown", 40),
+        Key.Delete    => ("Delete",    "Delete",    46),
+        _             => (key.ToString(), "", 0),
+    };
+
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
 
         var docPt = ToDocPoint(e.GetPosition(this));
+
+        if (!IsPreviewing && _webPreviews is not null)
+        {
+            // a drag that started in a page stays in that page, wherever the pointer wanders
+            if (_webPointerDown && _webFocus is { } dragged && LayerOf(dragged) is { } draggedLayer)
+            {
+                _webPreviews.SendMouse(dragged, "mouseMoved", WebLocal(draggedLayer, dragged, docPt),
+                                       "left", 1, CdpModifiers(e.KeyModifiers));
+                e.Handled = true;
+                return;
+            }
+
+            // plain hover still goes down so the page's own rollovers work
+            if (!e.KeyModifiers.HasFlag(KeyModifiers.Alt) &&
+                HitTestInteractiveWeb(docPt) is ({ } hoverLayer, { } hovered))
+                _webPreviews.SendMouse(hovered, "mouseMoved", WebLocal(hoverLayer, hovered, docPt),
+                                       "none", 0, CdpModifiers(e.KeyModifiers));
+        }
 
         if (_draggedGuide is not null)
         {
@@ -979,6 +1189,7 @@ public class GtCanvasControl : Control
 
             ApplyResizeDelta(target, shiftHeld);
             InvalidateVisual();
+            TransformLive?.Invoke(this, EventArgs.Empty);
             e.Handled = true;
             return;
         }
@@ -1012,6 +1223,7 @@ public class GtCanvasControl : Control
                 sel.Location = new GtPoint(nx, ny);
             }
             InvalidateVisual();
+            TransformLive?.Invoke(this, EventArgs.Empty);
             e.Handled = true;
             return;
         }
@@ -1056,6 +1268,19 @@ public class GtCanvasControl : Control
     {
         base.OnPointerReleased(e);
 
+        if (_webPointerDown && e.InitialPressMouseButton == MouseButton.Left)
+        {
+            _webPointerDown = false;
+            e.Pointer.Capture(null);
+
+            if (_webFocus is { } web && LayerOf(web) is { } layer)
+                _webPreviews?.SendMouse(web, "mouseReleased",
+                                        WebLocal(layer, web, ToDocPoint(e.GetPosition(this))),
+                                        "left", 1, CdpModifiers(e.KeyModifiers));
+            e.Handled = true;
+            return;
+        }
+
         if (_draggedGuide is not null && e.InitialPressMouseButton == MouseButton.Left)
         {
             e.Pointer.Capture(null);
@@ -1069,6 +1294,12 @@ public class GtCanvasControl : Control
             _isDrawing = false;
             e.Pointer.Capture(null);
             var rect = MakeRect(_drawStart, _drawCurrent);
+
+            // a web page is nearly always wanted at full canvas size, so a plain click places one there; dragging a box still sizes it by hand
+            if (ActiveTool == CanvasTool.Web && _document is not null &&
+                (rect.Width < 2 || rect.Height < 2))
+                rect = new Rect(0, 0, _document.Width, _document.Height);
+
             if (rect.Width >= 2 && rect.Height >= 2)
                 DrawCompleted?.Invoke(rect);
             InvalidateVisual();
@@ -2572,6 +2803,7 @@ public class GtCanvasControl : Control
             case GtRectangleElement rect:    RenderRectangle(ctx, rect, bounds);    break;
             case GtEllipseElement   ellipse: RenderEllipse(ctx, ellipse, bounds);   break;
             case GtImageElement     img:     RenderImage(ctx, img, bounds);         break;
+            case GtWebElement       web:     RenderWeb(ctx, web, bounds);           break;
             case GtTextBlock        tb:      RenderTextBlock(ctx, tb, bounds);      break;
         }
     }
@@ -2671,6 +2903,67 @@ public class GtCanvasControl : Control
             default:  // Stretch, and any unknown value
                 return box;
         }
+    }
+
+    /// <summary>draws the newest frame the element's live page has sent, stretched to its box. Nothing is drawn while exporting: an export has to match what vMix will play, and vMix only sees the empty carrier rectangle the page is saved as</summary>
+    private void RenderWeb(DrawingContext ctx, GtWebElement web, Rect bounds)
+    {
+        if (_exportMode) return;
+        if (bounds.Width <= 0 || bounds.Height <= 0) return;
+
+        var view = _webPreviews?.Ensure(web, new PixelSize(
+            Math.Clamp((int)Math.Round(bounds.Width),  16, 4096),
+            Math.Clamp((int)Math.Round(bounds.Height), 16, 4096)));
+
+        if (view?.Frame is { } bmp)
+        {
+            var srcRect = new Rect(0, 0, bmp.PixelSize.Width, bmp.PixelSize.Height);
+            using (ctx.PushClip(bounds))
+                ctx.DrawImage(bmp, srcRect, bounds);
+
+            // the page is taking input, so it gets a frame saying so - clicks over it are not going to select or move the box
+            if (web.Interactive && !IsPreviewing)
+                ctx.DrawRectangle(null, new Pen(new SolidColorBrush(
+                    ReferenceEquals(_webFocus, web) ? Color.FromArgb(230, 120, 200, 120)
+                                                    : Color.FromArgb(120, 120, 200, 120)),
+                    1.0 / Math.Max(Zoom, 0.0001)), bounds);
+            return;
+        }
+
+        RenderWebPlaceholder(ctx, web, bounds, view);
+    }
+
+    /// <summary>the box a web element occupies before its page has sent a picture: a dashed frame plus whatever it is waiting on</summary>
+    private void RenderWebPlaceholder(DrawingContext ctx, GtWebElement web, Rect bounds,
+                                      WebPreviewService.WebView? view)
+    {
+        double scale = 1.0 / Math.Max(Zoom, 0.0001);
+
+        var pen = new Pen(new SolidColorBrush(Color.FromArgb(200, 110, 150, 200)), 1.0 * scale)
+        {
+            DashStyle = new DashStyle(new double[] { 4, 3 }, 0),
+        };
+        ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(28, 110, 150, 200)), pen, bounds);
+
+        string label =
+            view?.Error is { } err                ? err
+            : string.IsNullOrWhiteSpace(web.Url)  ? "Web page - set a URL in the properties bar"
+            : view?.Starting == true              ? "Starting browser…"
+            : web.Url;
+
+        var text = new FormattedText(label, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+                                     new Typeface("Segoe UI"), 11,
+                                     new SolidColorBrush(Color.FromArgb(230, 210, 225, 245)));
+        text.MaxTextWidth = Math.Max(20, bounds.Width / scale - 12);
+        text.MaxLineCount = 2;
+
+        var origin = new Point(bounds.X + (bounds.Width  - text.Width  * scale) / 2,
+                               bounds.Y + (bounds.Height - text.Height * scale) / 2);
+
+        using (ctx.PushClip(bounds))
+        using (ctx.PushTransform(Matrix.CreateScale(scale, scale) *
+                                 Matrix.CreateTranslation(origin.X, origin.Y)))
+            ctx.DrawText(text, new Point(0, 0));
     }
 
     /// <summary>line box height and baseline offset for one laid-out line, mirroring the single <c>LineSpacing</c> float GT stores which carries three different meanings depending on its magnitude (D2D1Text.CreateTextFormat calls SetLineSpacing with the same value for both the height and the baseline argument): &lt;= 0 is the sentinel where SetLineSpacing is never called so DWrite uses the font metrics (ascent + descent + lineGap) untouched; 0 &lt; v &lt;= 2 is proportional, a multiplier of the font-computed line height and of the baseline so the extra leading lands above every line including the first, which is why raising line spacing also pushes the block down; v &gt; 2 is uniform, an absolute line height in DIPs with baseline at the bottom of the box, so 2.001 collapses every line onto the previous one, and the cliff is in the original with no clamping and is reproduced here so saved titles match; <paramref name="fontHeight"/>/<paramref name="fontBaseline"/> are the font's own line box as DirectWrite computes it (see FontMetricsService), and scaling both keeps LineSpacing 1.0 pixel-identical to the 0 sentinel</summary>

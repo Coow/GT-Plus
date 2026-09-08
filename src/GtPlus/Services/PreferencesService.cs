@@ -48,6 +48,9 @@ public class PreferencesService
     /// <summary>remembered ffmpeg binary, empty means "search the usual places"</summary>
     public string FfmpegPath { get; set; } = "";
 
+    /// <summary>remembered Chrome/Edge/Chromium binary used to capture web page previews, empty means "search the usual places"</summary>
+    public string ChromiumPath { get; set; } = "";
+
     public int    ExportFps         { get; set; } = 30;
     /// <summary>seconds the title holds between the in and out halves of an export</summary>
     public double ExportHoldSeconds { get; set; } = 3;
@@ -87,6 +90,7 @@ public class PreferencesService
                 CheckUpdatesOnStartup = data.CheckUpdatesOnStartup;
                 SkippedUpdateVersion  = data.SkippedUpdateVersion ?? "";
                 FfmpegPath        = data.FfmpegPath ?? "";
+                ChromiumPath      = data.ChromiumPath ?? "";
                 ExportFps         = data.ExportFps > 0 ? data.ExportFps : 30;
                 ExportHoldSeconds = Math.Clamp(data.ExportHoldSeconds, 0, 3600);
                 ExportCrf         = Math.Clamp(data.ExportCrf, 0, 51);
@@ -123,6 +127,7 @@ public class PreferencesService
                 CheckUpdatesOnStartup = CheckUpdatesOnStartup,
                 SkippedUpdateVersion  = SkippedUpdateVersion,
                 FfmpegPath        = FfmpegPath,
+                ChromiumPath      = ChromiumPath,
                 ExportFps         = ExportFps,
                 ExportHoldSeconds = ExportHoldSeconds,
                 ExportCrf         = ExportCrf,
@@ -155,6 +160,7 @@ public class PreferencesService
         public bool   CheckUpdatesOnStartup      { get; set; } = true;
         public string SkippedUpdateVersion       { get; set; } = "";
         public string FfmpegPath                { get; set; } = "";
+        public string ChromiumPath              { get; set; } = "";
         public int    ExportFps                 { get; set; } = 30;
         public double ExportHoldSeconds         { get; set; } = 3;
         public int    ExportCrf                 { get; set; } = 20;

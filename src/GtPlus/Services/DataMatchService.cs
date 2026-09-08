@@ -278,6 +278,7 @@ public static class DataMatchService
         GtImageElement     => "Image",
         GtRectangleElement => "Rectangle",
         GtEllipseElement   => "Ellipse",
+        GtWebElement       => "Web",
         _                  => element.GetType().Name,
     };
 }

@@ -26,6 +26,9 @@ public class GtZipWriter
         var carrierLayer = carrier is not null && document.Layers.Count > 0 ? document.Layers[0] : null;
         carrierLayer?.Elements.Insert(0, carrier!);
 
+        // web pages travel the same way, each swapped for a carrier at its own index so it comes back in the right layer and z-order
+        var webSwaps = WebPagePart.Replace(document);
+
         // write to a temp file first, avoids corrupting the original on failure
         var tempPath = path + ".gtzip_tmp";
         try
@@ -41,6 +44,7 @@ public class GtZipWriter
         }
         finally
         {
+            WebPagePart.Restore(webSwaps);
             if (carrier is not null) carrierLayer?.Elements.Remove(carrier);
         }
     }
@@ -88,6 +92,9 @@ public class GtZipWriter
         foreach (var layer in document.Layers)
             root.Add(SerializeLayer(layer));
 
+        // a web page is written under its carrier's name, not its own, so an animation still pointing at one would name an object the file does not contain
+        var designOnly = WebPagePart.CarriedNames(document);
+
         // GT drops a DataChange storyboard whose field no longer exists (object deleted, renamed away, or a ticker template changed) rather than writing a scope nothing can ever trigger
         foreach (var storyboard in document.Storyboards)
         {
@@ -97,7 +104,7 @@ public class GtZipWriter
                 continue;
             }
 
-            root.Add(SerializeStoryboard(storyboard));
+            root.Add(SerializeStoryboard(storyboard, designOnly));
         }
 
 
@@ -146,11 +153,18 @@ public class GtZipWriter
             new XElement("Layer.Composition", comp));
     }
 
-    private static XElement SerializeStoryboard(GtStoryboard storyboard)
+    private static XElement SerializeStoryboard(GtStoryboard storyboard, HashSet<string> designOnly)
     {
         var animations = new XElement("Storyboard.Animations");
         foreach (var anim in storyboard.Animations)
+        {
+            if (designOnly.Contains(anim.Object))
+            {
+                Logger.Debug($"  skipping {anim.TypeName} on '{anim.Object}': object is stored as a GT+ carrier");
+                continue;
+            }
             animations.Add(SerializeAnimation(anim));
+        }
 
         var el = new XElement("Storyboard");
         // TransitionIn is the default and GT writes no attribute for it
