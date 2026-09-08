@@ -164,6 +164,8 @@ public partial class MainWindow : Window
 
         // clicking anywhere outside a focused text box drops its focus, so keystrokes (tool shortcuts, delete, arrows) don't land in the box by accident
         AddHandler(PointerPressedEvent, OnWindowPressedForFocus, RoutingStrategies.Tunnel);
+
+        NewDocument(1920, 1080);
     }
 
     /// <summary>clears keyboard focus when the press lands outside the focused text box</summary>
