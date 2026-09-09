@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text.Json;
+using Avalonia.Media;
 
 namespace GtPlus.Services;
 
@@ -21,6 +22,21 @@ public class PreferencesService
 
     /// <summary>opacity applied to the selected layer's overflow (= 1 - OutsideLayerTransparency)</summary>
     public double OutsideLayerOpacity => 1.0 - OutsideLayerTransparency;
+
+    /// <summary>flat colour or checker grid behind the document</summary>
+    public CanvasBackgroundMode CanvasBackground { get; set; } = CanvasBackgroundMode.Solid;
+
+    /// <summary>colour painted behind the document in <see cref="CanvasBackgroundMode.Solid"/> mode</summary>
+    public Color CanvasSolidColor { get; set; } = Colors.Black;
+
+    /// <summary>the grid's base colour, the one that fills the squares a checker leaves empty</summary>
+    public Color CanvasGridColor { get; set; } = Color.FromRgb(0xDD, 0xDD, 0xDD);
+
+    /// <summary>the grid's alternating colour</summary>
+    public Color CanvasGridSecondaryColor { get; set; } = Color.FromRgb(0xAA, 0xAA, 0xAA);
+
+    /// <summary>one checker square in document pixels, so the pattern scales with zoom</summary>
+    public double CanvasGridSize { get; set; } = 32;
 
     /// <summary>when true, shows the debug info panel in the right sidebar</summary>
     public bool ShowDebugPanel { get; set; } = false;
@@ -77,6 +93,13 @@ public class PreferencesService
             {
                 OutsideCanvasTransparency = Math.Clamp(data.OutsideCanvasTransparency, 0.0, 1.0);
                 OutsideLayerTransparency  = Math.Clamp(data.OutsideLayerTransparency, 0.0, 1.0);
+                CanvasBackground          = string.Equals(data.CanvasBackground, "Grid", StringComparison.OrdinalIgnoreCase)
+                                                ? CanvasBackgroundMode.Grid
+                                                : CanvasBackgroundMode.Solid;
+                CanvasSolidColor          = ParseColor(data.CanvasSolidColor,         Colors.Black);
+                CanvasGridColor           = ParseColor(data.CanvasGridColor,          Color.FromRgb(0xDD, 0xDD, 0xDD));
+                CanvasGridSecondaryColor  = ParseColor(data.CanvasGridSecondaryColor, Color.FromRgb(0xAA, 0xAA, 0xAA));
+                CanvasGridSize            = Math.Clamp(data.CanvasGridSize, 2, 512);
                 ShowDebugPanel            = data.ShowDebugPanel;
                 AutoFitOnTimelineOpen     = data.AutoFitOnTimelineOpen;
                 ShowRulers                = data.ShowRulers;
@@ -114,6 +137,11 @@ public class PreferencesService
             {
                 OutsideCanvasTransparency = OutsideCanvasTransparency,
                 OutsideLayerTransparency  = OutsideLayerTransparency,
+                CanvasBackground          = CanvasBackground.ToString(),
+                CanvasSolidColor          = CanvasSolidColor.ToString(),
+                CanvasGridColor           = CanvasGridColor.ToString(),
+                CanvasGridSecondaryColor  = CanvasGridSecondaryColor.ToString(),
+                CanvasGridSize            = CanvasGridSize,
                 ShowDebugPanel            = ShowDebugPanel,
                 AutoFitOnTimelineOpen     = AutoFitOnTimelineOpen,
                 ShowRulers                = ShowRulers,
@@ -143,10 +171,18 @@ public class PreferencesService
         catch { }
     }
 
+    private static Color ParseColor(string? text, Color fallback)
+        => Color.TryParse(text, out var c) ? c : fallback;
+
     private class PrefsData
     {
         public double OutsideCanvasTransparency { get; set; } = 0.70;
         public double OutsideLayerTransparency  { get; set; } = 0.70;
+        public string CanvasBackground          { get; set; } = "Solid";
+        public string CanvasSolidColor          { get; set; } = "#FF000000";
+        public string CanvasGridColor           { get; set; } = "#FFDDDDDD";
+        public string CanvasGridSecondaryColor  { get; set; } = "#FFAAAAAA";
+        public double CanvasGridSize            { get; set; } = 32;
         public bool   ShowDebugPanel            { get; set; } = false;
         public bool   AutoFitOnTimelineOpen     { get; set; } = true;
         public bool   ShowRulers                { get; set; } = true;

@@ -311,6 +311,16 @@ public class GtCanvasControl : Control
         set => SetValue(OutsideLayerOpacityProperty, value);
     }
 
+    public static readonly StyledProperty<IBrush?> BackgroundBrushProperty =
+        AvaloniaProperty.Register<GtCanvasControl, IBrush?>(nameof(BackgroundBrush), Brushes.Black);
+
+    /// <summary>brush painted behind the document - a flat colour or the checker grid, built from Preferences; never drawn in export mode, which keeps the alpha channel</summary>
+    public IBrush? BackgroundBrush
+    {
+        get => GetValue(BackgroundBrushProperty);
+        set => SetValue(BackgroundBrushProperty, value);
+    }
+
     public HistoryService? History { get; set; }
 
     public static readonly StyledProperty<bool> ShowGuidesProperty =
@@ -643,6 +653,7 @@ public class GtCanvasControl : Control
             ApplyZoom((double)change.NewValue!);
         else if (change.Property == OutsideCanvasOpacityProperty ||
                  change.Property == OutsideLayerOpacityProperty ||
+                 change.Property == BackgroundBrushProperty ||
                  change.Property == ShowGuidesProperty)
             InvalidateVisual();
         else if (change.Property == ActiveToolProperty)
@@ -1775,7 +1786,7 @@ public class GtCanvasControl : Control
         {
             var docBounds = new Rect(0, 0, docW, docH);
 
-            ctx.DrawRectangle(Brushes.Black, null, docBounds);
+            ctx.DrawRectangle(BackgroundBrush ?? Brushes.Black, null, docBounds);
 
             if (doc is null) return;
 

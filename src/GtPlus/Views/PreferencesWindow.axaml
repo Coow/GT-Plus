@@ -2,7 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="GtPlus.Views.PreferencesWindow"
         Title="Preferences"
-        Width="380" Height="440"
+        Width="400" Height="520"
         MinWidth="340" MinHeight="240"
         CanResize="True"
         WindowStartupLocation="CenterOwner"
@@ -150,6 +150,106 @@
                            FontSize="11"
                            TextWrapping="Wrap" />
             </StackPanel>
+        </StackPanel>
+
+        <Border Height="1" Background="#333333" />
+
+        <!-- canvas background section -->
+        <StackPanel Spacing="8">
+            <TextBlock Text="CANVAS BACKGROUND"
+                       FontSize="10"
+                       FontWeight="SemiBold"
+                       Foreground="#888888" />
+
+            <StackPanel Orientation="Horizontal" Spacing="16">
+                <RadioButton x:Name="SolidBackgroundRadio"
+                             GroupName="CanvasBackground"
+                             Content="Solid Color"
+                             Foreground="#cccccc"
+                             FontSize="12"
+                             IsCheckedChanged="BackgroundMode_IsCheckedChanged" />
+                <RadioButton x:Name="GridBackgroundRadio"
+                             GroupName="CanvasBackground"
+                             Content="Grid Pattern"
+                             Foreground="#cccccc"
+                             FontSize="12"
+                             IsCheckedChanged="BackgroundMode_IsCheckedChanged" />
+            </StackPanel>
+
+            <!-- solid colour -->
+            <StackPanel x:Name="SolidBackgroundPanel" Spacing="4">
+                <TextBlock Text="Background Color"
+                           Foreground="#cccccc"
+                           FontSize="12" />
+
+                <Button x:Name="SolidColorButton"
+                        Width="52" Height="26" Padding="2"
+                        HorizontalAlignment="Left"
+                        ToolTip.Tip="Canvas Background Color"
+                        Click="SolidColorButton_Click">
+                    <Panel>
+                        <Border CornerRadius="2" Background="#888888" />
+                        <Border x:Name="SolidColorSwatch" CornerRadius="2" />
+                    </Panel>
+                </Button>
+            </StackPanel>
+
+            <!-- grid colours + cell size -->
+            <StackPanel x:Name="GridBackgroundPanel" Spacing="6">
+                <StackPanel Orientation="Horizontal" Spacing="16">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Primary"
+                                   Foreground="#cccccc"
+                                   FontSize="12" />
+                        <Button x:Name="GridColorButton"
+                                Width="52" Height="26" Padding="2"
+                                ToolTip.Tip="Grid Primary Color"
+                                Click="GridColorButton_Click">
+                            <Panel>
+                                <Border CornerRadius="2" Background="#888888" />
+                                <Border x:Name="GridColorSwatch" CornerRadius="2" />
+                            </Panel>
+                        </Button>
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Secondary"
+                                   Foreground="#cccccc"
+                                   FontSize="12" />
+                        <Button x:Name="GridSecondaryColorButton"
+                                Width="52" Height="26" Padding="2"
+                                ToolTip.Tip="Grid Secondary Color"
+                                Click="GridSecondaryColorButton_Click">
+                            <Panel>
+                                <Border CornerRadius="2" Background="#888888" />
+                                <Border x:Name="GridSecondaryColorSwatch" CornerRadius="2" />
+                            </Panel>
+                        </Button>
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Square Size"
+                                   Foreground="#cccccc"
+                                   FontSize="12" />
+                        <NumericUpDown x:Name="GridSizeBox"
+                                       Minimum="2" Maximum="512" Increment="2"
+                                       FormatString="0"
+                                       Value="32"
+                                       Width="110"
+                                       ValueChanged="GridSizeBox_ValueChanged" />
+                    </StackPanel>
+                </StackPanel>
+
+                <TextBlock Text="One square, in document pixels, so the pattern scales with the zoom level."
+                           Foreground="#777777"
+                           FontSize="11"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+
+            <TextBlock Text="The background sits behind the document on the editing canvas only. It is never composited into an exported video."
+                       Foreground="#777777"
+                       FontSize="11"
+                       TextWrapping="Wrap" />
         </StackPanel>
 
         <Border Height="1" Background="#333333" />

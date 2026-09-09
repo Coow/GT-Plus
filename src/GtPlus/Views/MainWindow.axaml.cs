@@ -63,6 +63,7 @@ public partial class MainWindow : Window
         _prefs.Load();
         GtCanvas.OutsideCanvasOpacity = _prefs.OutsideCanvasOpacity;
         GtCanvas.OutsideLayerOpacity  = _prefs.OutsideLayerOpacity;
+        GtCanvas.BackgroundBrush      = CanvasBackgroundBrush.Build(_prefs);
         DebugPanel.IsVisible = _prefs.ShowDebugPanel;
 
         LayersPanel.Canvas  = GtCanvas;
