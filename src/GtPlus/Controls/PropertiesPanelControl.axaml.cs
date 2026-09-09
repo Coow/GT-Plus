@@ -9,6 +9,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using GtPlus.Models;
 using GtPlus.Services;
 using GtPlus.Views;
@@ -161,31 +162,17 @@ public partial class PropertiesPanelControl : UserControl
 
         // FontFamilyBox: grab inner PART_TextBox when template is applied
         FontFamilyBox.TemplateApplied += (_, e) =>
-            _fontInnerBox = e.NameScope.Find<TextBox>("PART_TextBox");
-        FontFamilyBox.GotFocus       += FontFamilyBox_GotFocus;
-        FontFamilyBox.DropDownClosed += (_, _) =>
         {
-            if (CurrentText is null) return;
-
-            var name = FontFamilyBox.SelectedItem as string;
-            if (!string.IsNullOrEmpty(name) && name != CurrentText.FontFamily)
-            {
-                var texts   = AllTexts;
-                var befores = texts.Select(t => t.FontFamily).ToList();
-                var n       = name;
-                foreach (var t in texts) t.FontFamily = n;
-                PushHistory("Font family",
-                    () => { for (int i = 0; i < texts.Count; i++) texts[i].FontFamily = befores[i]; },
-                    () => { foreach (var t in texts) t.FontFamily = n; });
-                Apply();
-            }
-
-            _fontJustSelected = !string.IsNullOrEmpty(name);
-
-            _updating = true;
-            FontFamilyBox.Text = CurrentText.FontFamily;
-            _updating = false;
+            _fontInnerBox = e.NameScope.Find<TextBox>("PART_TextBox");
+            if (_fontInnerBox is not null)
+                _fontInnerBox.AddHandler(KeyDownEvent, FontFamilyBox_KeyDown, RoutingStrategies.Tunnel);
         };
+        FontFamilyBox.GotFocus += FontFamilyBox_GotFocus;
+        // three ways out of the box, all of them have to commit: picking from the list, pressing
+        // Enter on a search that never highlighted a row, and clicking away with a name typed.
+        // The commit is posted because the dropdown closes before Text/SelectedItem settle
+        FontFamilyBox.DropDownClosed += (_, _) => PostFontCommit();
+        FontFamilyBox.LostFocus      += (_, _) => PostFontCommit();
 
         // TextInputBox: track value for history on LostFocus
         TextInputBox.GotFocus  += TextInputBox_GotFocus;
@@ -869,7 +856,83 @@ public partial class PropertiesPanelControl : UserControl
     {
         if (_updating || CurrentText is null) return;
         if (_fontJustSelected) { _fontJustSelected = false; return; }
+        _updating = true;
+        FontFamilyBox.SelectedItem = null;   // else a stale pick outranks whatever gets typed next
         _fontInnerBox?.Clear();
+        _updating = false;
+    }
+
+    private void FontFamilyBox_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            PostFontCommit();
+        }
+        else if (e.Key == Key.Escape && CurrentText is not null)
+        {
+            _updating = true;
+            FontFamilyBox.SelectedItem = null;
+            FontFamilyBox.Text = CurrentText.FontFamily;
+            _updating = false;
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>queues <see cref="CommitFontFamily"/> behind the input that triggered it; a pick
+    /// updates Text and SelectedItem after DropDownClosed/LostFocus have already fired, so reading
+    /// them inline sees the pre-pick values</summary>
+    private void PostFontCommit()
+        => Dispatcher.UIThread.Post(CommitFontFamily, DispatcherPriority.Background);
+
+    /// <summary>applies whatever the font box names to every selected text object. The typed text
+    /// leads and <c>SelectedItem</c> only backs it up: SelectedItem stays null whenever the user
+    /// typed a search and left without arrowing onto a row, which is why searching for a font used
+    /// to leave the box reverted and nothing applied</summary>
+    private void CommitFontFamily()
+    {
+        if (_updating || CurrentText is null) return;
+
+        var name  = ResolveFontName(FontFamilyBox.Text)
+                 ?? ResolveFontName(FontFamilyBox.SelectedItem as string);
+        var texts = AllTexts;
+
+        // compared across the whole selection, not just the primary - the others can still differ
+        if (name is not null && texts.Any(t => t.FontFamily != name))
+        {
+            var befores = texts.Select(t => t.FontFamily).ToList();
+            var n       = name;
+            foreach (var t in texts) t.FontFamily = n;
+            PushHistory("Font family",
+                () => { for (int i = 0; i < texts.Count; i++) texts[i].FontFamily = befores[i]; },
+                () => { foreach (var t in texts) t.FontFamily = n; });
+            Apply();
+        }
+
+        _fontJustSelected = name is not null;
+
+        _updating = true;
+        FontFamilyBox.Text = CurrentText.FontFamily;
+        _updating = false;
+    }
+
+    /// <summary>maps what is in the box onto an installed family: exact name, else a unique-enough
+    /// prefix, else the first substring hit (the order the filtered dropdown itself shows). Returns
+    /// null when nothing matches so the box just snaps back instead of setting a bogus family</summary>
+    private string? ResolveFontName(string? typed)
+    {
+        typed = typed?.Trim();
+        if (string.IsNullOrEmpty(typed)) return null;
+
+        foreach (var f in _fontNames)
+            if (string.Equals(f, typed, StringComparison.OrdinalIgnoreCase)) return f;
+
+        foreach (var f in _fontNames)
+            if (f.StartsWith(typed, StringComparison.OrdinalIgnoreCase)) return f;
+
+        foreach (var f in _fontNames)
+            if (f.Contains(typed, StringComparison.OrdinalIgnoreCase)) return f;
+
+        return null;
     }
 
     private void FontSizeBox_ValueChanged(object? sender, NumericUpDownValueChangedEventArgs e)
