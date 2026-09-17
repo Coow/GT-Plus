@@ -11,6 +11,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Media.Immutable;
 using Avalonia.Media.TextFormatting;
 using Avalonia.Platform;
 using Avalonia.Rendering.SceneGraph;
@@ -1878,8 +1879,18 @@ public class GtCanvasControl : Control
                 scopes.Add(ctx.PushClip(new RoundedRect(clip)));
             }
 
+            // a layer Fade covers everything in the layer, shadows included, so it goes through the
+            // isolating mask whenever anything underneath it casts one; see PushComposedOpacity.
+            // the mask's bounds are a hard clip on the layer it opens, so they have to hold the whole
+            // frame (contents can be shown overflowing it) plus the reach of the shadows inside
             if (anim.OpacityMul < 1.0)
-                scopes.Add(ctx.PushOpacity(Math.Clamp(anim.OpacityMul, 0.0, 1.0)));
+            {
+                double alpha = Math.Clamp(anim.OpacityMul, 0.0, 1.0);
+                scopes.Add(LayerCastsShadow(layer)
+                    ? ctx.PushOpacityMask(new ImmutableSolidColorBrush(Colors.White, alpha),
+                                          box.Union(docBounds).Inflate(LayerShadowReach(layer)))
+                    : ctx.PushOpacity(alpha));
+            }
 
             RenderLayerContent(ctx, layer, docBounds);
         }
@@ -1887,6 +1898,28 @@ public class GtCanvasControl : Control
         {
             for (int i = scopes.Count - 1; i >= 0; i--) scopes[i].Dispose();
         }
+    }
+
+    /// <summary>true when the layer or anything visible in it casts a shadow, so an opacity over the whole layer has to be isolated</summary>
+    private static bool LayerCastsShadow(GtLayer layer)
+    {
+        if (GtShadow.Any(layer.Effects)) return true;
+        foreach (var el in layer.Elements)
+            if (el.Visible && GtShadow.Any(el.Effects)) return true;
+        return false;
+    }
+
+    /// <summary>the furthest any shadow in the layer reaches past whatever casts it; sizes the layers the shadow-aware paths open, since both the effect and the opacity mask clip to the bounds they are given</summary>
+    private static double LayerShadowReach(GtLayer layer)
+    {
+        double reach = GtShadow.Resolve(layer.Effects)?.MaxReach() ?? 0;
+        foreach (var el in layer.Elements)
+        {
+            if (!el.Visible) continue;
+            if (GtShadow.Resolve(el.Effects) is { } shadow)
+                reach = Math.Max(reach, shadow.MaxReach() + Overdraw(el));
+        }
+        return reach;
     }
 
     /// <summary>doc-space transform for a layer override: scale about its anchor, then the in-plane rotation about the frame centre, then the animated offset</summary>
@@ -2003,6 +2036,16 @@ public class GtCanvasControl : Control
             Rect? localLayer = showOverflow && OutsideLayerOpacity < 1.0 ? layerRect : null;
 
             IDisposable? maskScope = showOverflow ? null : ctx.PushClip(new RoundedRect(layerRect));
+
+            // a layer is a GraphicsObject too and can carry the same shadow an element can; GT's own
+            // gallery never puts one here, but a hand-authored file may, and the layer frame is the
+            // surface the shadow is cast from - except while the overflow is being shown, where the
+            // contents deliberately reach past it and the effect layer has to reach with them
+            var layerShadow = GtShadow.Resolve(layer.Effects);
+            IDisposable? effectScope = layerShadow is null
+                ? null
+                : ctx.PushEffect(layerShadow.ToEffect(),
+                                 showOverflow ? layerRect.Union(localCanvas) : layerRect);
             try
             {
                 // name to element map for mask resolution within this layer
@@ -2019,6 +2062,7 @@ public class GtCanvasControl : Control
             }
             finally
             {
+                effectScope?.Dispose();
                 maskScope?.Dispose();
             }
         }
@@ -2082,7 +2126,13 @@ public class GtCanvasControl : Control
         var scopes = new List<IDisposable>(3);
         try
         {
-            if (maskAlpha < 1.0)      scopes.Add(ctx.PushOpacity(maskAlpha));
+            // a fading mask dims the element it masks, and that dimming has to reach its shadow once rather than twice, same as its own opacity does
+            if (maskAlpha < 1.0)
+            {
+                var scope = PushComposedOpacity(ctx, maskAlpha, element,
+                                                AnimatedBounds(element, anim));
+                if (scope is not null) scopes.Add(scope);
+            }
             if (maskGeom is not null) scopes.Add(ctx.PushGeometryClip(maskGeom));
             if (maskReveal is { } mrc) scopes.Add(ctx.PushClip(new RoundedRect(mrc)));
 
@@ -2251,6 +2301,10 @@ public class GtCanvasControl : Control
         // Z-only (or no) rotation: exact affine path; the canvas-edge clips live in unrotated layer space so they must be pushed before the rotation transform, otherwise the dimming boundary spins with the element and the fade follows its unrotated bounding box instead of the canvas edge; the rotated footprint (AABB of the turned rect) drives the inside/outside tests for the same reason
         var footprint = RotatedFootprint(bounds, rz);
 
+        // a shadow is part of the element's picture, so what it puts outside the canvas has to dim with it; the widest edge is applied all round rather than per-edge because the shadow turns with the element
+        if (GtShadow.Resolve(element.Effects) is { } shadow)
+            footprint = footprint.Inflate(shadow.MaxReach());
+
         // frames that dim what escapes them: the canvas, and the selected layer's own box; each one the footprint leaves costs it a multiplier so the corner outside both fades by the product
         var frames = new List<(Rect Rect, double Outside)>(2);
         var outsideOp = _exportMode ? 1.0 : OutsideCanvasOpacity;
@@ -2342,16 +2396,28 @@ public class GtCanvasControl : Control
                                GtCrop? crop, double rz, double opacity)
     {
         using var rotScope = PushZRotation(ctx, rz, bounds);
-        WithOpacity(ctx, opacity, () => RenderCore(ctx, element, bounds, crop));
+        using var opScope  = PushComposedOpacity(ctx, opacity, element, bounds);
+        RenderCore(ctx, element, bounds, crop);
     }
 
-    private static void WithOpacity(DrawingContext ctx, double opacity, Action render)
+    /// <summary>an opacity scope over something that may be casting a shadow, fading the two together the way GT's compose step does</summary>
+    /// <remarks>Avalonia folds an ambient opacity into the paints it draws with <em>and</em> into the shadow an effect generates, so a plain <c>PushOpacity</c> over a shadowed object fades the shadow twice (a half-opaque element keeps a quarter-opacity shadow) and leaves the shadow showing through the element it belongs to. GT composites element over shadow first and fades the finished picture once, so where a shadow is in play the fade goes through an opacity mask instead: a flat white brush at the wanted alpha, which forces a real layer and gets both right. Without a shadow the cheaper push is kept</remarks>
+    private static IDisposable? PushComposedOpacity(DrawingContext ctx, double opacity,
+                                                    GtElement element, Rect bounds)
     {
-        if (opacity < 1.0)
-            using (ctx.PushOpacity(opacity))
-                render();
-        else
-            render();
+        if (opacity >= 1.0) return null;
+        if (!GtShadow.Any(element.Effects)) return ctx.PushOpacity(opacity);
+
+        return ctx.PushOpacityMask(new ImmutableSolidColorBrush(Colors.White, opacity),
+                                   EffectBounds(element, bounds));
+    }
+
+    /// <summary>the element's box grown to hold everything it draws: its own overdraw plus the reach of its shadow</summary>
+    private static Rect EffectBounds(GtElement element, Rect bounds)
+    {
+        double margin = Overdraw(element);
+        if (GtShadow.Resolve(element.Effects) is { } shadow) margin += shadow.MaxReach();
+        return margin > 0 ? bounds.Inflate(margin) : bounds;
     }
 
     /// <summary>computes the 4 screen-space corners of the element after 3D rotation and perspective projection; vMix convention is RotateX (model) acts as Y-axis rotation (compresses width), RotateY (model) acts as X-axis rotation (compresses height), RotateZ is standard 2D in-plane rotation; application order matches WPF PlaneProjection, X-axis (RotateY_model) then Y-axis (RotateX_model) then Z-axis; returns corners TL, TR, BR, BL in layer-local coordinate space</summary>
@@ -2404,8 +2470,13 @@ public class GtCanvasControl : Control
                                               Rect localCanvas, double opacity, GtCrop? crop,
                                               double rx, double ry, double rz)
     {
-        int pw = Math.Max(1, (int)Math.Round(bounds.Width));
-        int ph = Math.Max(1, (int)Math.Round(bounds.Height));
+        // the surface has to hold the shadow as well as the element or the blur is cut off at the box
+        // edge; growing it evenly keeps its centre on the element's, which is the point the 3D turn
+        // pivots about - GT grows the quad the same way and spends its CenterOffset keeping that pivot
+        var surface = EffectBounds(element, bounds);
+
+        int pw = Math.Max(1, (int)Math.Round(surface.Width));
+        int ph = Math.Max(1, (int)Math.Round(surface.Height));
 
         byte[] pixels;
         int rowBytes;
@@ -2414,7 +2485,7 @@ public class GtCanvasControl : Control
             // render element content flat (no rotation) to a temp RenderTargetBitmap
             using var rtb = new RenderTargetBitmap(new PixelSize(pw, ph), new Vector(96, 96));
             using (var tmpCtx = rtb.CreateDrawingContext())
-            using (tmpCtx.PushTransform(Matrix.CreateTranslation(-bounds.X, -bounds.Y)))
+            using (tmpCtx.PushTransform(Matrix.CreateTranslation(-surface.X, -surface.Y)))
             {
                 // pass bounds as localCanvas so the element is always "fully inside" (no outside-dimming)
                 RenderCore(tmpCtx, element, bounds, crop);
@@ -2431,8 +2502,9 @@ public class GtCanvasControl : Control
         catch
         {
             // fallback: affine Z-rotation only
-            using var zRot = PushZRotation(ctx, rz, bounds);
-            WithOpacity(ctx, opacity, () => RenderCore(ctx, element, localCanvas, crop));
+            using var zRot   = PushZRotation(ctx, rz, bounds);
+            using var opScope = PushComposedOpacity(ctx, opacity, element, bounds);
+            RenderCore(ctx, element, localCanvas, crop);
             return;
         }
 
@@ -2440,7 +2512,9 @@ public class GtCanvasControl : Control
         var skImg = SKImage.FromPixelCopy(info, pixels, rowBytes);
         if (skImg is null) return;
 
-        var quad = ComputePerspectiveQuad(bounds, rx, ry, rz);
+        // the quad is the grown surface's, and the bitmap already carries element over shadow, so the
+        // opacity on the draw fades the pair together exactly as GT's compose does
+        var quad = ComputePerspectiveQuad(surface, rx, ry, rz);
         ctx.Custom(new PerspectiveBitmapOp(skImg, pw, ph, quad, (float)opacity));
     }
 
@@ -2806,7 +2880,32 @@ public class GtCanvasControl : Control
         _cropMasks.Clear();
     }
 
+    /// <summary>the element's own artwork with its shadow behind it</summary>
+    /// <remarks>GT runs effects on the object's private surface and only then composites the grown result, so opacity, crop and mask all act on element-plus-shadow rather than on either alone: a half-opaque element fades together with its shadow instead of showing it through itself. Sitting inside <see cref="RenderCore"/>'s crop scope reproduces that ordering, and the shadow is generated from whatever was drawn into the element box, so a flipped or scrolling element casts the shadow of what is actually on screen</remarks>
     private void RenderShape(DrawingContext ctx, GtElement element, Rect bounds)
+    {
+        if (GtShadow.Resolve(element.Effects) is not { } shadow)
+        {
+            RenderShapeCore(ctx, element, bounds);
+            return;
+        }
+
+        // Avalonia inflates the effect's layer by the blur and offset itself, but it clips that layer
+        // to the bounds handed in; a thick stroke straddles the element box and would lose its outer
+        // half, so the box grows by whatever this element is allowed to draw past it
+        using (ctx.PushEffect(shadow.ToEffect(), bounds.Inflate(Overdraw(element))))
+            RenderShapeCore(ctx, element, bounds);
+    }
+
+    /// <summary>how far outside its box an element's own drawing reaches; text and images are clipped to the box already, a stroked shape straddles it by half the pen width</summary>
+    private static double Overdraw(GtElement element) => element switch
+    {
+        GtRectangleElement rect    => rect.StrokeThickness    / 2,
+        GtEllipseElement   ellipse => ellipse.StrokeThickness / 2,
+        _                          => 0,
+    };
+
+    private void RenderShapeCore(DrawingContext ctx, GtElement element, Rect bounds)
     {
         switch (element)
         {

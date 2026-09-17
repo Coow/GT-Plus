@@ -116,8 +116,9 @@
 
                                 <Button x:Name="AddButton" Content="+ Animation" FontSize="11" Padding="8,2"
                                         VerticalAlignment="Center" Margin="4,0,0,0"
-                                        ToolTip.Tip="Add an animation for the selected element"
-                                        Click="AddAnimation_Click" />
+                                        ToolTip.Tip="Add an animation for every selected object. Right-click to pick the animation type."
+                                        Click="AddAnimation_Click"
+                                        ContextRequested="AddAnimation_ContextRequested" />
                                 <Button x:Name="AddSequenceButton" Content="+ Sequence" FontSize="11" Padding="8,2"
                                         IsEnabled="False" VerticalAlignment="Center"
                                         ToolTip.Tip="Add an ImageSequence animation for the selected image sequence and set its length. Needs a storyboard on the timeline to add to."

@@ -83,6 +83,9 @@ public partial class TimelinePanelControl : UserControl
     /// <summary>supplies the name a new animation should target, a layer when one is selected or an element otherwise; falls back to <see cref="SelectedElementProvider"/> when unset</summary>
     public Func<string?>? SelectedObjectNameProvider { get; set; }
 
+    /// <summary>supplies every object a new animation should target, so adding one with a group selected on the canvas gives each of them their own clip; falls back to <see cref="SelectedObjectNameProvider"/> when unset or empty</summary>
+    public Func<IReadOnlyList<string>>? SelectedObjectNamesProvider { get; set; }
+
     public TimelinePanelControl()
     {
         InitializeComponent();
@@ -1470,20 +1473,63 @@ public partial class TimelinePanelControl : UserControl
         if (_selected is not null) RefreshStripIfSelected(_selected);
     }
 
-    private void AddAnimation_Click(object? sender, RoutedEventArgs e)
+    private void AddAnimation_Click(object? sender, RoutedEventArgs e) => AddAnimations(null);
+
+    /// <summary>right-clicking the button picks the type instead of taking the storyboard's default one; only the types the target storyboard can actually play are offered, since a Continuous storyboard runs the never-ending animations and every other storyboard runs the fixed ones</summary>
+    private void AddAnimation_ContextRequested(object? sender, ContextRequestedEventArgs e)
     {
         if (_document is null) return;
 
-        var selectedName = SelectedObjectNameProvider?.Invoke();
-        var objectName = !string.IsNullOrEmpty(selectedName)
-            ? selectedName!
-            : SelectedElementProvider?.Invoke()?.Name ?? _document.Layers.FirstOrDefault()?.Name ?? "";
+        bool continuous = TargetStoryboard?.IsContinuousEvent == true;
+
+        var menu = new MenuFlyout();
+        foreach (var type in Enum.GetValues<GtAnimationType>())
+        {
+            // Unknown is the reader's catch-all and None is GT's do-nothing placeholder, neither is worth authoring
+            if (type is GtAnimationType.Unknown or GtAnimationType.None) continue;
+            if (GtAnimation.IsContinuous(type) != continuous) continue;
+
+            var chosen = type;
+            var item = new MenuItem { Header = type.ToString() };
+            item.Click += (_, _) => AddAnimations(chosen);
+            menu.Items.Add(item);
+        }
+
+        menu.ShowAt(AddButton);
+        e.Handled = true;
+    }
+
+    /// <summary>objects a new animation targets: every selected element (or the selected layer), so adding one with a group selected gives each object its own clip; falls back to the single-object providers and finally to the first layer when the canvas has nothing selected</summary>
+    private List<string> TargetObjectNames()
+    {
+        var names = new List<string>();
+
+        foreach (var name in SelectedObjectNamesProvider?.Invoke() ?? Array.Empty<string>())
+            if (!string.IsNullOrEmpty(name) && !names.Contains(name, StringComparer.OrdinalIgnoreCase))
+                names.Add(name);
+
+        if (names.Count > 0) return names;
+
+        var single = SelectedObjectNameProvider?.Invoke();
+        if (string.IsNullOrEmpty(single)) single = SelectedElementProvider?.Invoke()?.Name;
+        if (string.IsNullOrEmpty(single)) single = _document?.Layers.FirstOrDefault()?.Name;
+
+        names.Add(single ?? "");
+        return names;
+    }
+
+    /// <summary>adds one clip per selected object to the storyboard on the timeline, of <paramref name="type"/> or the storyboard's own default when null; the whole group is one history entry and comes back selected, so the property strip edits them together</summary>
+    private void AddAnimations(GtAnimationType? type)
+    {
+        if (_document is null) return;
+
+        var names = TargetObjectNames();
 
         // in a combined view the animation joins whichever half the selection is in, falling back to the first (TransitionIn) when nothing is selected
         var storyboard = _selectedStoryboard ?? VisibleStoryboards.FirstOrDefault();
 
         // checked before a storyboard is created so a rejected add leaves nothing behind
-        if (storyboard is not null && !EnsureRoomFor(storyboard, objectName)) return;
+        if (storyboard is not null && !TrimToObjectsWithRoom(storyboard, names)) return;
 
         // adding an animation implies a storyboard to hold it
         if (storyboard is null)
@@ -1499,33 +1545,68 @@ public partial class TimelinePanelControl : UserControl
         }
 
         // a Continuous storyboard only ever runs the never-ending animation types, so a new row there starts as one instead of a Fade GT would not play
-        bool continuous = storyboard.IsContinuousEvent;
+        var chosen = type ?? (storyboard.IsContinuousEvent
+            ? GtAnimationType.RotateContinuous
+            : GtAnimationType.Fade);
 
-        var anim = continuous
-            ? new GtAnimation
-            {
-                TypeName = "RotateContinuous",
-                Type     = GtAnimationType.RotateContinuous,
-                Object   = objectName,
-                Speed    = GtAnimation.DefaultSpeed,
-            }
-            : new GtAnimation
-            {
-                TypeName = "Fade",
-                Type     = GtAnimationType.Fade,
-                Object   = objectName,
-                Duration = GtAnimation.DefaultDuration,
-                Interpolation = GtInterpolation.CubicEasingInOut,
-            };
-
+        var added = names.Select(name => NewAnimation(chosen, name)).ToList();
         var owner = storyboard;
-        owner.Animations.Add(anim);
-        History?.Push(new PropertyChangeAction($"Add {anim.TypeName} animation",
-            undo: () => { owner.Animations.Remove(anim); AfterModelChange(); SelectAnimation(null); },
-            redo: () => { owner.Animations.Add(anim);    AfterModelChange(); SelectAnimation(anim, owner); }));
 
-        AfterModelChange();
-        SelectAnimation(anim, owner);
+        void Add()
+        {
+            foreach (var anim in added) owner.Animations.Add(anim);
+            AfterModelChange();
+            Track.SetSelection(added);
+            SyncSelection(Track.SelectedAnimation, owner);
+        }
+
+        void Remove()
+        {
+            foreach (var anim in added) owner.Animations.Remove(anim);
+            AfterModelChange();
+            SelectAnimation(null);
+        }
+
+        Add();
+
+        var description = added.Count > 1
+            ? $"Add {added.Count} {added[0].TypeName} animations"
+            : $"Add {added[0].TypeName} animation";
+
+        History?.Push(new PropertyChangeAction(description, undo: Remove, redo: Add));
+    }
+
+    /// <summary>a clip of <paramref name="type"/> aimed at <paramref name="objectName"/>, carrying the defaults GT applies: a continuous type runs off a Speed and never ends, everything else off a Duration</summary>
+    private static GtAnimation NewAnimation(GtAnimationType type, string objectName)
+    {
+        bool continuous = GtAnimation.IsContinuous(type);
+
+        return new GtAnimation
+        {
+            TypeName      = type.ToString(),
+            Type          = type,
+            Object        = objectName,
+            Direction     = GtAnimation.DefaultDirectionFor(type),
+            Duration      = continuous ? null : GtAnimation.DefaultDuration,
+            Speed         = continuous ? GtAnimation.DefaultSpeed : null,
+            Interpolation = continuous ? GtInterpolation.Linear : GtInterpolation.CubicEasingInOut,
+        };
+    }
+
+    /// <summary>drops the objects already at GT's per-object limit out of <paramref name="names"/> and names them in a warning, so one full object in a group does not sink the whole add; false when none of them has room and there is nothing to add</summary>
+    private bool TrimToObjectsWithRoom(GtStoryboard storyboard, List<string> names)
+    {
+        var full = names.Where(n => !storyboard.HasRoomFor(n)).ToList();
+        if (full.Count == 0) return true;
+
+        names.RemoveAll(n => !storyboard.HasRoomFor(n));
+
+        var listed = string.Join(", ",
+            full.Select(n => $"\"{(string.IsNullOrEmpty(n) ? "(no object)" : n)}\""));
+        ShowWarning($"⚠ {listed} already at {GtStoryboard.MaxAnimationsPerObject} animations - " +
+                    "GT Title Designer's limit per object.", transient: true);
+
+        return names.Count > 0;
     }
 
     /// <summary>muting is editor state not an edit: the preview is rebuilt without the clip, but nothing is pushed onto the history stack and the file stays clean</summary>

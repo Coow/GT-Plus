@@ -1170,6 +1170,77 @@
                         </StackPanel>
                     </Grid>
 
+                    <!-- shadow (any element): GT's Effects gallery, a colour and the two numbers behind the presets -->
+                    <Grid x:Name="ShadowPanel" IsVisible="False" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">
+                            <Border Width="1" Background="#444444"
+                                    VerticalAlignment="Stretch" Margin="5,0"/>
+
+                            <StackPanel Orientation="Vertical" Spacing="1"
+                                        VerticalAlignment="Center" Margin="0,0,4,0">
+                                <Button x:Name="ShadowColorButton"
+                                        Width="32" Height="32" Padding="2"
+                                        ToolTip.Tip="Shadow Color - only editable once the element has a shadow, exactly as GT's gallery menu behaves"
+                                        Click="ShadowColorButton_Click">
+                                    <Panel>
+                                        <Border CornerRadius="2" Background="#888888"/>
+                                        <Border x:Name="ShadowColorSwatch" CornerRadius="2"/>
+                                    </Panel>
+                                </Button>
+                                <TextBlock Text="Shadow" FontSize="10"
+                                           Foreground="#888888"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+
+                            <Grid ColumnDefinitions="Auto,144" RowDefinitions="Auto,Auto,Auto"
+                                  VerticalAlignment="Center">
+
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Preset"
+                                           FontSize="11" Foreground="#888888"
+                                           VerticalAlignment="Center" Margin="0,0,4,3"/>
+                                <ComboBox Grid.Row="0" Grid.Column="1"
+                                          x:Name="ShadowPresetBox"
+                                          FontSize="11" HorizontalAlignment="Stretch"
+                                          VerticalAlignment="Center" Margin="0,0,0,3"
+                                          ToolTip.Tip="GT's twelve shadow presets. None removes the effect entirely - GT has no disabled-but-present shadow."
+                                          SelectionChanged="ShadowPresetBox_SelectionChanged"/>
+
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Blur"
+                                           x:Name="ShadowBlurLabel"
+                                           FontSize="11" Foreground="#888888"
+                                           VerticalAlignment="Center" Margin="0,0,4,3"/>
+                                <NumericUpDown Grid.Row="1" Grid.Column="1"
+                                               x:Name="ShadowBlurBox"
+                                               FontSize="11" FormatString="0.##"
+                                               Minimum="0" Maximum="200" Increment="1"
+                                               VerticalAlignment="Center" Margin="0,0,0,3"
+                                               ToolTip.Tip="Gaussian standard deviation in composition pixels; the shadow fades out at about three times this. GT's presets are 0, 3, 5 and 9."
+                                               ValueChanged="ShadowBlurBox_ValueChanged"/>
+
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Offset"
+                                           x:Name="ShadowOffsetLabel"
+                                           FontSize="11" Foreground="#888888"
+                                           VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <Grid Grid.Row="2" Grid.Column="1" ColumnDefinitions="*,4,*">
+                                    <NumericUpDown Grid.Column="0"
+                                                   x:Name="ShadowOffsetXBox"
+                                                   FontSize="11" FormatString="0.##"
+                                                   Minimum="-999" Maximum="999" Increment="1"
+                                                   VerticalAlignment="Center"
+                                                   ToolTip.Tip="Shadow X offset in composition pixels, positive is right"
+                                                   ValueChanged="ShadowOffsetBox_ValueChanged"/>
+                                    <NumericUpDown Grid.Column="2"
+                                                   x:Name="ShadowOffsetYBox"
+                                                   FontSize="11" FormatString="0.##"
+                                                   Minimum="-999" Maximum="999" Increment="1"
+                                                   VerticalAlignment="Center"
+                                                   ToolTip.Tip="Shadow Y offset in composition pixels, positive is down"
+                                                   ValueChanged="ShadowOffsetBox_ValueChanged"/>
+                                </Grid>
+                            </Grid>
+                        </StackPanel>
+                    </Grid>
+
                     <!-- opacity (any element): model stores 0-1, the bar shows whole percent; Anchor rides underneath it, it decides which point of the box the X/Y boxes report and grow from and is what the file's Location measures -->
                     <Grid x:Name="OpacityPanel" IsVisible="False" VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">

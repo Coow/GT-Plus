@@ -109,6 +109,7 @@ public partial class MainWindow : Window
         // a selected layer is the animation target in its own right, GT animates layers and elements through the same Object attribute
         TimelinePanel.SelectedObjectNameProvider = () =>
             GtCanvas.SelectedLayer?.Name ?? GtCanvas.SelectedElements.FirstOrDefault()?.Name;
+        TimelinePanel.SelectedObjectNamesProvider = SelectedAnimationTargets;
         TimelinePanel.PreviewTimeChanged    += OnTimelinePreviewChanged;
         TimelinePanel.PreviewEnabledChanged += OnTimelinePreviewEnabledChanged;
         TimelinePanel.CloseRequested     += () => SetTimelineVisible(false);
@@ -1543,6 +1544,29 @@ public partial class MainWindow : Window
 
     /// <summary>true while the timeline was the last surface clicked, Delete follows it there</summary>
     private bool _timelineIsActiveSurface;
+
+    /// <summary>every object a new animation should target: the selected layer, or all selected elements walked in document order so a group add lands the clips in the order the layers panel lists them rather than in selection order</summary>
+    private IReadOnlyList<string> SelectedAnimationTargets()
+    {
+        if (GtCanvas.SelectedLayer is { } layer)
+            return string.IsNullOrEmpty(layer.Name) ? Array.Empty<string>() : new[] { layer.Name };
+
+        var selected = GtCanvas.SelectedElements;
+        if (selected.Count == 0) return Array.Empty<string>();
+
+        var names = new List<string>();
+        if (GtCanvas.Document is { } doc)
+            foreach (var l in doc.Layers)
+                foreach (var el in l.Elements)
+                    if (selected.Contains(el) && !string.IsNullOrEmpty(el.Name))
+                        names.Add(el.Name);
+
+        // an element the document no longer lists still deserves its clip
+        if (names.Count == 0)
+            names.AddRange(selected.Select(el => el.Name).Where(n => !string.IsNullOrEmpty(n)));
+
+        return names;
+    }
 
     private void OnTimelinePreviewChanged(IReadOnlyList<GtTimelineSegment> segments, double time)
     {

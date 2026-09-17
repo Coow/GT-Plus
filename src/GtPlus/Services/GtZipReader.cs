@@ -296,6 +296,7 @@ public class GtZipReader
             Dimensions = GtSize.Parse(el.Attribute("Dimensions")?.Value),
             Locked = ParseBool(el.Attribute("Locked")?.Value),
             Visible = ParseBool(el.Attribute("Visible")?.Value, true),
+            Effects = ParseEffects(el.Element("Layer.Effects")),
         };
 
         var innerComp = el.Element("Layer.Composition")?.Element("Composition");
@@ -396,7 +397,61 @@ public class GtZipReader
         // parse <ElementType.Bounding><Bounding Object="Name" Padding="l,t,r,b"/></ElementType.Bounding>
         element.Bounding = ParseBounding(el.Element(el.Name.LocalName + ".Bounding")?.Element("Bounding"));
 
+        // parse <ElementType.Effects><Effect Type="Shadow" .../></ElementType.Effects>
+        element.Effects = ParseEffects(el.Element(el.Name.LocalName + ".Effects"));
+
         return element;
+    }
+
+    /// <summary>reads an effects list; GT drops every attribute still sitting on its constructed default so each effect starts from those and only the attributes present override them, which is why an absent <c>Color</c> is opaque black rather than nothing. Order is significant and preserved, and anything in the list that is not an <c>&lt;Effect&gt;</c> is skipped exactly as GT's own reader does</summary>
+    private static List<GtEffect> ParseEffects(XElement? container)
+    {
+        var effects = new List<GtEffect>();
+        if (container is null) return effects;
+
+        foreach (var child in container.Elements())
+        {
+            if (child.Name.LocalName != "Effect")
+            {
+                Logger.Warn($"Unknown effect element '{child.Name.LocalName}', skipping");
+                continue;
+            }
+
+            var effect = new GtEffect
+            {
+                Type = ParseEnum(child.Attribute("Type")?.Value, GtEffectType.None),
+                Mode = ParseEnum(child.Attribute("Mode")?.Value, GtEffectMode.Replace),
+            };
+
+            if (child.Attribute("BlurAmount")?.Value is { } blur)
+                effect.BlurAmount = ParseDouble(blur);
+            if (child.Attribute("Color")?.Value is { } color)
+                effect.Color = ParseColor(color, GtEffect.DefaultColor);
+            if (ParseVector2(child.Attribute("Offset")?.Value) is { } offset)
+                effect.Offset = offset;
+            if (ParseVector2(child.Attribute("Angle")?.Value) is { } angle)
+                effect.Angle = angle;
+            if (ParseVector2(child.Attribute("CenterOffset")?.Value) is { } centerOffset)
+                effect.CenterOffset = centerOffset;
+            if (child.Attribute("Depth")?.Value is { } depth)
+                effect.Depth = ParseDouble(depth, GtEffect.DefaultDepth);
+
+            effects.Add(effect);
+        }
+
+        return effects;
+    }
+
+    /// <summary>GT parses effect enums case-sensitively and throws on anything it does not know; a hand-edited file should not fail the whole load here, so an unrecognised name falls back to the default and is logged</summary>
+    private static T ParseEnum<T>(string? value, T fallback) where T : struct, Enum
+    {
+        if (string.IsNullOrWhiteSpace(value)) return fallback;
+        if (Enum.TryParse<T>(value!.Trim(), ignoreCase: true, out var parsed) &&
+            Enum.IsDefined(typeof(T), parsed))
+            return parsed;
+
+        Logger.Warn($"Unknown {typeof(T).Name} '{value}', using {fallback}");
+        return fallback;
     }
 
     /// <summary>reads a Crop child; either attribute may be absent, an absent Range means the full box and an absent Feather means hard edges</summary>
@@ -671,11 +726,24 @@ public class GtZipReader
             double.Parse(p[1], CultureInfo.InvariantCulture));
     }
 
-    private static Color ParseColor(string? hex)
+    private static Color ParseColor(string? hex) => ParseColor(hex, Colors.Transparent);
+
+    private static Color ParseColor(string? hex, Color fallback)
     {
-        if (string.IsNullOrEmpty(hex)) return Colors.Transparent;
+        if (string.IsNullOrEmpty(hex)) return fallback;
         try { return Color.Parse(hex); }
-        catch { return Colors.Transparent; }
+        catch { return fallback; }
+    }
+
+    /// <summary>a GT <c>GraphicsVector2</c> attribute, <c>"X,Y"</c>; GT parses both halves with TryParse and leaves the property alone if either fails, so anything malformed comes back as null and the caller keeps the default</summary>
+    private static GtPoint? ParseVector2(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var parts = value!.Split(',');
+        if (parts.Length < 2) return null;
+        if (!double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x)) return null;
+        if (!double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y)) return null;
+        return new GtPoint(x, y);
     }
 
     private static double ParseDouble(string? value, double fallback = 0)

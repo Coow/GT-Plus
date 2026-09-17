@@ -144,13 +144,15 @@ public class GtZipWriter
             if (node is not null) comp.Add(node);
         }
 
-        return new XElement("Layer",
+        var layerEl = new XElement("Layer",
             new XAttribute("Name",       layer.Name),
             new XAttribute("Dimensions", Sz(layer.Dimensions)),
             new XAttribute("Location",   Pt(layer.Location)),
             new XAttribute("Locked",     Bool(layer.Locked)),
             new XAttribute("Visible",    Bool(layer.Visible)),
             new XElement("Layer.Composition", comp));
+        WriteEffects(layerEl, layer.Effects, "Layer");
+        return layerEl;
     }
 
     private static XElement SerializeStoryboard(GtStoryboard storyboard, HashSet<string> designOnly)
@@ -210,6 +212,7 @@ public class GtZipWriter
         WriteMask(el, tb, "TextBlock");
         WriteCrop(el, tb, "TextBlock");
         WriteBounding(el, tb, "TextBlock");
+        WriteEffects(el, tb.Effects, "TextBlock");
         return el;
     }
 
@@ -246,6 +249,7 @@ public class GtZipWriter
         WriteMask(el, ticker, "Ticker");
         WriteCrop(el, ticker, "Ticker");
         WriteBounding(el, ticker, "Ticker");
+        WriteEffects(el, ticker.Effects, "Ticker");
         return el;
     }
 
@@ -293,6 +297,7 @@ public class GtZipWriter
         WriteMask(el, img, "Image");
         WriteCrop(el, img, "Image");
         WriteBounding(el, img, "Image");
+        WriteEffects(el, img.Effects, "Image");
         return el;
     }
 
@@ -312,6 +317,7 @@ public class GtZipWriter
         WriteMask(el, rect, "Rectangle");
         WriteCrop(el, rect, "Rectangle");
         WriteBounding(el, rect, "Rectangle");
+        WriteEffects(el, rect.Effects, "Rectangle");
         return el;
     }
 
@@ -329,6 +335,7 @@ public class GtZipWriter
         WriteMask(el, ellipse, "Ellipse");
         WriteCrop(el, ellipse, "Ellipse");
         WriteBounding(el, ellipse, "Ellipse");
+        WriteEffects(el, ellipse.Effects, "Ellipse");
         return el;
     }
 
@@ -373,6 +380,39 @@ public class GtZipWriter
                 $"{Fmt(bounding.PaddingRight)},{Fmt(bounding.PaddingBottom)}"));
 
         el.Add(new XElement(typeName + ".Bounding", node));
+    }
+
+    /// <summary>emits &lt;ElementType.Effects&gt; with one &lt;Effect&gt; per entry, in list order; nothing is written for an object with no effects</summary>
+    /// <remarks>GT's serializer drops every property still sitting on the value its constructor gave it, and its reader seeds the same defaults before applying attributes, so the omissions are part of the format rather than tidying: an <c>Effect</c> with no <c>Color</c> reads back as opaque black, no <c>Offset</c> as a centred glow, and no <c>BlurAmount</c> as a hard-edged one. Writing them out anyway would round-trip through GT unchanged but would not match its own output byte for byte, and the same XML backs its clipboard and its undo stack</remarks>
+    private static void WriteEffects(XElement el, IReadOnlyList<GtEffect> effects, string typeName)
+    {
+        if (effects.Count == 0) return;
+
+        var container = new XElement(typeName + ".Effects");
+        foreach (var effect in effects)
+        {
+            // attribute order follows GT's property declaration order
+            var node = new XElement("Effect");
+            if (effect.Type != GtEffectType.None)
+                node.Add(new XAttribute("Type", effect.Type.ToString()));
+            if (effect.Mode != GtEffectMode.Replace)
+                node.Add(new XAttribute("Mode", effect.Mode.ToString()));
+            if (effect.BlurAmount != 0)
+                node.Add(new XAttribute("BlurAmount", Fmt(effect.BlurAmount)));
+            if (effect.Color != GtEffect.DefaultColor)
+                node.Add(new XAttribute("Color", ColorStr(effect.Color)));
+            if (effect.Offset != GtPoint.Zero)
+                node.Add(new XAttribute("Offset", Vec2(effect.Offset)));
+            if (effect.Angle != GtEffect.DefaultAngle)
+                node.Add(new XAttribute("Angle", Vec2(effect.Angle)));
+            if (effect.CenterOffset != GtPoint.Zero)
+                node.Add(new XAttribute("CenterOffset", Vec2(effect.CenterOffset)));
+            if (effect.Depth != GtEffect.DefaultDepth)
+                node.Add(new XAttribute("Depth", Fmt(effect.Depth)));
+            container.Add(node);
+        }
+
+        el.Add(container);
     }
 
     private static string SerializeDashStyle(GtStrokeDashStyle s) => s switch
@@ -527,6 +567,9 @@ public class GtZipWriter
     private static string Pt(GtPoint p) => $"{Fmt(p.X)},{Fmt(p.Y)},0";
 
     private static string Sz(GtSize s) => $"{Fmt(s.Width)},{Fmt(s.Height)},0";
+
+    /// <summary>a GT <c>GraphicsVector2</c>, two components with no trailing Z unlike <see cref="Pt"/></summary>
+    private static string Vec2(GtPoint p) => $"{Fmt(p.X)},{Fmt(p.Y)}";
 
     private static string Bool(bool b) => b ? "True" : "False";
 

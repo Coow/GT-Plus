@@ -108,22 +108,6 @@ public static class ElementConversionService
         _                    => (null, null, 0.0, GtStrokeDashStyle.Solid),
     };
 
-    private static void CopyBase(GtElement src, GtElement dst)
-    {
-        dst.Name       = src.Name;
-        dst.Location   = src.Location;
-        dst.Z          = src.Z;
-        dst.Dimensions = src.Dimensions;
-        dst.Depth      = src.Depth;
-        dst.RotateX    = src.RotateX;
-        dst.RotateY    = src.RotateY;
-        dst.RotateZ    = src.RotateZ;
-        dst.Visible    = src.Visible;
-        dst.Opacity    = src.Opacity;
-        dst.Locked     = src.Locked;
-        dst.DataFlags  = src.DataFlags;
-        dst.MaskObject = src.MaskObject;
-        dst.Crop       = src.Crop?.Clone();
-        dst.Bounding   = src.Bounding?.Clone();
-    }
+    /// <summary>hands off to the model's own base copy rather than repeating the property list, so a property added to <see cref="GtElement"/> cannot go missing here; it also carries Anchor, which the copy this replaced left behind and which moved a converted element by half its box</summary>
+    private static void CopyBase(GtElement src, GtElement dst) => GtElement.CopyBase(src, dst);
 }

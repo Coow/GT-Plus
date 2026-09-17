@@ -169,6 +169,101 @@ public class GtBounding
     }
 }
 
+/// <summary>kind of effect a <see cref="GtEffect"/> is; ordinals are GT's own <c>GraphicsEffectType</c> and are sparse on purpose, never renumber them. Only <see cref="Shadow"/> is rendered by this editor, the rest are carried through a load/save so a file authored elsewhere keeps them</summary>
+public enum GtEffectType
+{
+    None         = 0,
+    GaussianBlur = 10,
+    Shadow       = 20,
+    Skew         = 30,
+    FlipX        = 40,
+    FlipY        = 50,
+    Reflection   = 70,
+    Composite    = 80,
+}
+
+/// <summary>which stage of GT's three-stage effect graph an effect runs in, not what kind of effect it is: <see cref="Replace"/> rewrites the object's own image (flips, skew), <see cref="Shadow"/> builds a second image composited *behind* it, <see cref="Finish"/> a third one composited behind the result (reflection). A shadow is therefore <c>Type=Shadow Mode=Shadow</c>, and the two are not redundant</summary>
+public enum GtEffectMode { Replace = 0, Shadow = 10, Finish = 20 }
+
+/// <summary>one entry of a <see cref="GtElement.Effects"/> list, serialized as <c>&lt;ElementType.Effects&gt;&lt;Effect Type="Shadow" Mode="Shadow" BlurAmount="3" Offset="5,5"/&gt;&lt;/ElementType.Effects&gt;</c>. GT gives every effect the same eight properties whatever its type, and its serializer drops each one still sitting on the constructed default, so an absent <c>Color</c> means opaque black rather than "no colour" and every field has to be seeded from the defaults here before the attributes are applied</summary>
+/// <remarks>shadow uses <see cref="Type"/>, <see cref="Mode"/>, <see cref="BlurAmount"/>, <see cref="Color"/> and <see cref="Offset"/>; <see cref="Angle"/> and <see cref="CenterOffset"/> belong to Skew and <see cref="Depth"/> to Reflection, and they are modelled only so those effects survive a round trip</remarks>
+public class GtEffect
+{
+    /// <summary>colour GT constructs an effect with, and therefore what an absent <c>Color</c> attribute means</summary>
+    public static readonly Color DefaultColor = Colors.Black;
+
+    /// <summary>GT's constructed default for <see cref="Angle"/>, a Skew property</summary>
+    public static readonly GtPoint DefaultAngle = new(30, 0);
+
+    /// <summary>GT's constructed default for <see cref="Depth"/>, a Reflection property</summary>
+    public const double DefaultDepth = 0.5;
+
+    public GtEffectType Type { get; set; } = GtEffectType.None;
+    public GtEffectMode Mode { get; set; } = GtEffectMode.Replace;
+
+    /// <summary>Gaussian standard deviation in composition pixels, fed straight to D2D's shadow effect; not a radius, see <see cref="GtShadow.BlurRadiusForSigma"/></summary>
+    public double BlurAmount { get; set; }
+
+    /// <summary>shadow colour, alpha included; alpha scales the shadow's own opacity and multiplies with the object's</summary>
+    public Color Color { get; set; } = DefaultColor;
+
+    /// <summary>translation in composition pixels, +X right and +Y down; applied after the blur and to the shadow branch only, so the object itself never moves</summary>
+    public GtPoint Offset { get; set; } = GtPoint.Zero;
+
+    /// <summary>Skew only</summary>
+    public GtPoint Angle { get; set; } = DefaultAngle;
+
+    /// <summary>Skew only</summary>
+    public GtPoint CenterOffset { get; set; } = GtPoint.Zero;
+
+    /// <summary>Reflection only</summary>
+    public double Depth { get; set; } = DefaultDepth;
+
+    /// <summary>true for the one combination that draws a shadow; <c>Type=Shadow</c> in another stage would blur the object itself rather than a copy behind it, so both halves must match</summary>
+    public bool IsShadow => Type == GtEffectType.Shadow && Mode == GtEffectMode.Shadow;
+
+    /// <summary>true when the shadow is displaced or softened; GT's gallery refuses to insert an effect that is neither, which is what makes its "None" preset a deletion</summary>
+    public bool HasShadowShape => BlurAmount != 0 || Offset.X != 0 || Offset.Y != 0;
+
+    public GtEffect Clone() => new()
+    {
+        Type         = Type,
+        Mode         = Mode,
+        BlurAmount   = BlurAmount,
+        Color        = Color,
+        Offset       = Offset,
+        Angle        = Angle,
+        CenterOffset = CenterOffset,
+        Depth        = Depth,
+    };
+
+    public static bool AreEqual(GtEffect? a, GtEffect? b)
+    {
+        if (ReferenceEquals(a, b)) return true;
+        if (a is null || b is null) return false;
+        return a.Type == b.Type && a.Mode == b.Mode
+            && a.BlurAmount == b.BlurAmount && a.Color == b.Color
+            && a.Offset == b.Offset && a.Angle == b.Angle
+            && a.CenterOffset == b.CenterOffset && a.Depth == b.Depth;
+    }
+
+    public static bool ListsEqual(IReadOnlyList<GtEffect> a, IReadOnlyList<GtEffect> b)
+    {
+        if (ReferenceEquals(a, b)) return true;
+        if (a.Count != b.Count) return false;
+        for (int i = 0; i < a.Count; i++)
+            if (!AreEqual(a[i], b[i])) return false;
+        return true;
+    }
+
+    public static List<GtEffect> CloneList(IReadOnlyList<GtEffect> source)
+    {
+        var copy = new List<GtEffect>(source.Count);
+        foreach (var e in source) copy.Add(e.Clone());
+        return copy;
+    }
+}
+
 /// <summary>vMix data-binding behaviour, combinable; <c>document.xml</c> stores them as a comma-separated list, e.g. <c>DataFlags="Hidden, NoEvents, ShowVisible"</c></summary>
 [Flags]
 public enum GtDataFlags
@@ -215,6 +310,9 @@ public abstract class GtElement
     /// <summary>box binding to another element in the same layer, null when the element carries no Bounding child</summary>
     public GtBounding? Bounding { get; set; }
 
+    /// <summary>GT's per-object effect list, in the order it renders them; empty for almost every object. Only shadows are drawn (see <see cref="GtShadow"/>), everything else is kept so a file authored in GT survives a save unchanged</summary>
+    public List<GtEffect> Effects { get; set; } = new();
+
     /// <summary>deep copy of every property including brushes and crop; <see cref="Name"/> is copied verbatim, so callers that add the copy to a document must give it a unique name and clone the animations targeting the original separately (they live on the storyboards)</summary>
     public abstract GtElement Clone();
 
@@ -239,6 +337,7 @@ public abstract class GtElement
         target.MaskObject = MaskObject;
         target.Crop       = Crop?.Clone();
         target.Bounding   = Bounding?.Clone();
+        target.Effects    = GtEffect.CloneList(Effects);
     }
 }
 
@@ -519,6 +618,9 @@ public class GtLayer
     public double InnerHeight { get; set; }
     public List<GtElement> Elements { get; set; } = new();
 
+    /// <summary>a layer is a GraphicsObject in GT and carries the same effect list an element does; GT's own Effects gallery only ever writes one onto the selected object so this stays empty for files it authored, but a hand-written one is read, drawn and saved back</summary>
+    public List<GtEffect> Effects { get; set; } = new();
+
     /// <summary>deep copy, elements included; <see cref="Name"/> and the element names are copied verbatim, so a caller adding the copy to a document must make every one of them unique since animations resolve their target by name</summary>
     public GtLayer Clone()
     {
@@ -531,6 +633,7 @@ public class GtLayer
             Visible     = Visible,
             InnerWidth  = InnerWidth,
             InnerHeight = InnerHeight,
+            Effects     = GtEffect.CloneList(Effects),
         };
         foreach (var el in Elements) copy.Elements.Add(el.Clone());
         return copy;

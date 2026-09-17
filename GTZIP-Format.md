@@ -508,6 +508,107 @@ so a `<Crop>` with no `Feather` still fades 8px.
 
 ---
 
+## Element Effects (shadow, glow)
+
+Every object - `Layer` included - can carry an ordered list of effects:
+
+```xml
+<TextBlock Name="Title" Location="100,100,0" Dimensions="400,80,0">
+  <TextBlock.Effects>
+    <Effect Type="Shadow" Mode="Shadow" BlurAmount="3" Offset="5,5" />
+  </TextBlock.Effects>
+</TextBlock>
+```
+
+The pattern is `<ElementType.Effects>` containing one `<Effect>` per entry. Order is significant
+(GT chains them) and an element with no effects carries no child at all. Shadow is not a feature
+of its own in GT, it is one member of this generic list.
+
+Each `<Effect>` has the same eight properties whatever its type:
+
+| Attribute      | Type              | Default     | Used by                                             |
+| -------------- | ----------------- | ----------- | --------------------------------------------------- |
+| `Type`         | enum              | `None`      | which effect: `GaussianBlur` `Shadow` `Skew` `FlipX` `FlipY` `Reflection` `Composite` |
+| `Mode`         | enum              | `Replace`   | which **stage** it runs in: `Replace` `Shadow` `Finish` |
+| `BlurAmount`   | float             | `0`         | Shadow, GaussianBlur - Gaussian **standard deviation** in composition pixels |
+| `Color`        | `#AARRGGBB`       | `#FF000000` | Shadow                                              |
+| `Offset`       | `X,Y` (two parts) | `0,0`       | Shadow - `+X` right, `+Y` down, composition pixels  |
+| `Angle`        | `X,Y`             | `30,0`      | Skew                                                |
+| `CenterOffset` | `X,Y`             | `0,0`       | Skew                                                |
+| `Depth`        | float             | `0.5`       | Reflection                                          |
+
+`Type` and `Mode` are two different things: `Mode` is the pipeline stage, not the effect kind. A
+shadow is `Type="Shadow" Mode="Shadow"` and both halves are needed - `Mode=Replace` would blur
+the object itself instead of a copy behind it. Flips and skews live in `Replace`, reflection in
+`Finish`.
+
+**Every attribute still sitting on its default above is omitted**, and GT's reader seeds those
+same defaults before applying what is present. That makes the omissions part of the format rather
+than tidying:
+
+- no `Color` means **opaque black**, not "no colour"
+- no `BlurAmount` means a hard-edged shadow
+- no `Offset` means a symmetric glow
+- the minimum legal shadow is `<Effect Type="Shadow" Mode="Shadow" BlurAmount="3" />`
+
+`Offset`, `Angle` and `CenterOffset` are two-component vectors - no trailing `,0` unlike
+`Location` and `Dimensions`. The same XML backs GT's clipboard and its undo stack, so anything
+not written here is lost on copy or undo inside GT itself.
+
+### How a shadow is drawn
+
+The object renders into its own surface, the shadow is built from the **alpha channel** of that
+surface (so a multicoloured element casts one flat-coloured shadow), blurred with a Gaussian of
+standard deviation `BlurAmount`, colourised, translated by `Offset`, and the object is composited
+back over the top. Opacity, crop and mask then apply to the **combined** element-plus-shadow
+picture, which is why a 50%-opaque element does not show its own shadow through itself.
+
+`BlurAmount` is a standard deviation, not a radius: the shadow has faded to nothing about `3 ×
+BlurAmount` pixels out. A shadow with `Offset="0,0"` and a blur is a glow - GT has no separate
+glow effect. A shadow with a blur of `0` and an offset is a hard-edged silhouette copy.
+
+One place vMix GT++ departs from GT here on purpose: a `Crop` on a shadowed element still cuts
+the shadow (the crop applies to the combined picture, as above) but its `Range` stays normalised
+against the element's own box. GT normalises it against the *grown* quad instead, so in GT adding
+a shadow to an already-cropped element shifts and rescales its crop - an original bug rather than
+intent, and not one worth reproducing.
+
+### What GT's UI can author
+
+The Effects ribbon offers a twelve-entry gallery and, in its drop-down, a colour picker - there
+are no free-form offset or blur controls:
+
+| Preset | `Offset` | `BlurAmount` | | Preset | `Offset` | `BlurAmount` |
+| --- | --- | --- | --- | --- | --- | --- |
+| None                | `0,0`  | `0` | | Bottom Left Sharp   | `-5,5` | `0` |
+| Glow Small          | `0,0`  | `3` | | Bottom Left Smooth  | `-5,5` | `3` |
+| Glow Medium         | `0,0`  | `5` | | Bottom Sharp        | `0,5`  | `0` |
+| Glow Large          | `0,0`  | `9` | | Bottom Smooth       | `0,5`  | `3` |
+| Bottom Right Sharp  | `5,5`  | `0` | | Top Sharp           | `0,-5` | `0` |
+| Bottom Right Smooth | `5,5`  | `3` | | Top Smooth          | `0,-5` | `3` |
+
+These are absolute composition pixels and do not scale with the element or the composition - a
+5px shadow is 5px on a 1920×1080 title. Applying one removes every existing shadow and inserts
+the new effect at index 0, and "None" deletes it outright: GT has no disabled-but-present shadow.
+Its colour picker only recolours a shadow that already exists, so colour alone cannot create one.
+
+Two GT behaviours vMix GT++ deliberately does **not** copy, both of which destroy data:
+
+- GT matches a file's shadow to the gallery by `(Offset, BlurAmount)` only and reports anything
+  else as "None", then overwrites it the moment the gallery is touched. vMix GT++ shows it as
+  *Custom*, and exposes the blur and offset as numbers so off-preset values can be authored
+  as well as kept
+- GT's lookup deletes every shadow past the first while it scans. vMix GT++ renders all of them
+  (chained shadows compose into a single equivalent Gaussian) and only rewrites the list when the
+  user actually changes something
+
+Effects vMix GT++ does not render - `GaussianBlur`, `Skew`, the flips, `Reflection`, `Composite` -
+are still read, kept in order and written back unchanged, so a file that uses them survives a
+round trip. Effects on a `Layer` are read, drawn and written, but only elements can be given one
+from the properties bar, matching GT's own object-scoped gallery.
+
+---
+
 ## `<Rectangle>`
 
 ```xml

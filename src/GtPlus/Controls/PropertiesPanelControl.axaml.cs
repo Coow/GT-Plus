@@ -37,6 +37,10 @@ public partial class PropertiesPanelControl : UserControl
     private bool               _openingGradientEditor;
     private bool               _suppressPickerColor;
 
+    /// <summary>the shared picker is editing the shadow colour rather than a fill or a stroke</summary>
+    private bool _editingShadow;
+    private List<(GtElement el, List<GtEffect> effects)>? _pickerShadowSnapshot;
+
     private GtTextBlock? CurrentText => _currentElement as GtTextBlock;
     private IReadOnlyList<GtTextBlock> AllTexts =>
         _allElements.OfType<GtTextBlock>().ToList();
@@ -114,6 +118,7 @@ public partial class PropertiesPanelControl : UserControl
         HookAlignButtons();
         PopulateFontWeights();
         PopulateStrokeCombos();
+        PopulateShadowPresets();
         MaskObjectBox.ItemsSource = _maskEntries;
         BoundingObjectBox.ItemsSource = _boundingEntries;
         WireBoundingPadding();
@@ -159,6 +164,10 @@ public partial class PropertiesPanelControl : UserControl
             (el, v) => { if (el is GtTextBlock tb) tb.LineSpacing = (double)v / 100.0; },
             (el)    => el is GtTextBlock tb2 ? SpacingPercent(tb2) : 100m,
             "Line spacing", deltaMode: false);
+
+        // the location and dimension boxes also take arithmetic: "*2" doubles what is in the box, "-5" nudges it
+        foreach (var box in new[] { XBox, YBox, ZBox, WBox, HBox, DBox })
+            ArithmeticInput.Attach(box);
 
         // FontFamilyBox: grab inner PART_TextBox when template is applied
         FontFamilyBox.TemplateApplied += (_, e) =>
@@ -300,6 +309,7 @@ public partial class PropertiesPanelControl : UserControl
         if (_allElements.Any(e => !FeatherIsUniform(e)))
             SetFeatherExpanded(true);
         OpacityPanel.IsVisible      = el is not null;
+        ShadowPanel.IsVisible       = el is not null;
         DataFlagsPanel.IsVisible    = el is not null;
         ImagePanel.IsVisible        = allImages;
 
@@ -338,6 +348,7 @@ public partial class PropertiesPanelControl : UserControl
             RefreshDataFlagChecks();
             RefreshMaskControls();
             RefreshBoundingControls();
+            RefreshShadowControls();
 
             if (el is GtTextBlock tb)
             {
@@ -1810,11 +1821,9 @@ public partial class PropertiesPanelControl : UserControl
         Apply();
     }
 
-    private void OpenColorPicker(bool fill)
+    /// <summary>builds the shared picker and its popup on first use; every swatch on the bar drives the same one, which one it is currently editing is held in <see cref="_editingFill"/> and <see cref="_editingShadow"/></summary>
+    private ColorPickerControl EnsureColorPicker()
     {
-        if (_currentElement is null) return;
-        _editingFill = fill;
-
         if (_colorPicker is null)
         {
             _colorPicker = new ColorPickerControl();
@@ -1833,19 +1842,36 @@ public partial class PropertiesPanelControl : UserControl
             _colorPopup.Closed += ColorPopup_Closed;
         }
 
+        return _colorPicker;
+    }
+
+    private void OpenColorPicker(bool fill)
+    {
+        if (_currentElement is null) return;
+        _editingFill   = fill;
+        _editingShadow = false;
+
+        EnsureColorPicker();
+        _colorPicker!.ShowGradientButton = true;
+
         // snapshot brushes before editing for history
         _pickerBrushSnapshot = SnapshotBrushes(fill);
 
         var initColor = PrimaryColor(fill ? GetFill(_currentElement) : GetStroke(_currentElement));
 
         // seeding the picker must not flatten an existing gradient
+        SeedPicker(initColor);
+
+        _colorPopup!.PlacementTarget = fill ? FillColorButton : StrokeColorButton;
+        _colorPopup.IsOpen = true;
+    }
+
+    private void SeedPicker(Color color)
+    {
         _suppressPickerColor = true;
-        _colorPicker.SetColor(initColor);
+        _colorPicker!.SetColor(color);
         _suppressPickerColor = false;
         _colorPicker.RefreshRecentColors();
-
-        _colorPopup.PlacementTarget = fill ? FillColorButton : StrokeColorButton;
-        _colorPopup.IsOpen = true;
     }
 
     private List<(GtElement el, GtBrush? before)> SnapshotBrushes(bool fill)
@@ -1878,7 +1904,17 @@ public partial class PropertiesPanelControl : UserControl
 
     private void ColorPopup_Closed(object? sender, EventArgs e)
     {
-        if (_colorPicker is null || _pickerBrushSnapshot is null) return;
+        if (_colorPicker is null) return;
+
+        if (_editingShadow)
+        {
+            ColorPickerControl.AddToRecent(_colorPicker.Color);
+            PushShadowHistory("Shadow color");
+            _editingShadow = false;
+            return;
+        }
+
+        if (_pickerBrushSnapshot is null) return;
 
         // the gradient editor takes over the snapshot, it pushes the history entry itself
         if (_openingGradientEditor) return;
@@ -1900,6 +1936,17 @@ public partial class PropertiesPanelControl : UserControl
     private void OnPickerColorChanged(Color c)
     {
         if (_currentElement is null || _suppressPickerColor) return;
+
+        if (_editingShadow)
+        {
+            // GT's UpdateShadow only recolours a shadow that is already there, it never makes one
+            foreach (var el in _allElements)
+                if (GtShadow.First(el.Effects) is { } shadow) shadow.Color = c;
+            RefreshShadowControls();
+            Apply();
+            return;
+        }
+
         foreach (var el in _allElements.Where(HasFillStroke))
         {
             var br = (_editingFill ? GetFill(el) : GetStroke(el)) ?? new GtBrush();
@@ -1919,7 +1966,8 @@ public partial class PropertiesPanelControl : UserControl
 
     private async void OnGradientRequested(object? sender, EventArgs e)
     {
-        if (_currentElement is null) return;
+        // the shadow swatch hides the gradient button, GT's shadow colour is a flat ColorF
+        if (_currentElement is null || _editingShadow) return;
 
         var fill = _editingFill;
         var snap = _pickerBrushSnapshot ?? SnapshotBrushes(fill);
@@ -1959,6 +2007,158 @@ public partial class PropertiesPanelControl : UserControl
 
         UpdateSwatch(fill ? FillColorSwatch : StrokeColorSwatch, brush);
         ElementChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    // ---- shadow ---------------------------------------------------------------------------------
+    //
+    // GT's Effects ribbon offers a twelve-entry gallery and, in its drop-down, a colour picker; there
+    // are no free-form controls, and the colour picker is inert until a preset has put an effect on
+    // the object. Both of those rules are kept here. The two departures are deliberate: the raw Blur
+    // and Offset the presets are built from are exposed as numbers (they are perfectly legal in the
+    // format, GT simply never writes anything but its twelve pairs), and a shadow whose geometry
+    // matches no preset reads back as "Custom" instead of GT's "None" - GT reports it as absent and
+    // then silently destroys it the next time the gallery is touched.
+
+    /// <summary>row after GT's twelve presets, holding a shadow they cannot describe</summary>
+    private int ShadowCustomIndex => GtShadow.Presets.Count;
+
+    private void PopulateShadowPresets()
+    {
+        foreach (var preset in GtShadow.Presets)
+            ShadowPresetBox.Items.Add(preset.Name);
+        ShadowPresetBox.Items.Add("Custom");
+        ShadowPresetBox.SelectedIndex = 0;
+    }
+
+    /// <summary>every shadow control from the primary element's first shadow effect; safe to call from inside <see cref="Populate"/>, it restores whatever <see cref="_updating"/> was</summary>
+    private void RefreshShadowControls()
+    {
+        var shadow = _currentElement is null ? null : GtShadow.First(_currentElement.Effects);
+
+        double offsetX = shadow?.Offset.X   ?? 0;
+        double offsetY = shadow?.Offset.Y   ?? 0;
+        double blur    = shadow?.BlurAmount ?? 0;
+
+        var wasUpdating = _updating;
+        _updating = true;
+        try
+        {
+            var preset = GtShadow.PresetIndex(offsetX, offsetY, blur);
+            ShadowPresetBox.SelectedIndex = preset >= 0 ? preset : ShadowCustomIndex;
+
+            ShadowBlurBox.Value    = (decimal)blur;
+            ShadowOffsetXBox.Value = (decimal)offsetX;
+            ShadowOffsetYBox.Value = (decimal)offsetY;
+
+            ShadowColorButton.IsEnabled  = shadow is not null;
+            ShadowColorSwatch.Background = shadow is null
+                ? null
+                : new SolidColorBrush(shadow.Color);
+        }
+        finally
+        {
+            _updating = wasUpdating;
+        }
+    }
+
+    /// <summary>colour a replacement shadow inherits: whatever the element's current one uses, or GT's opaque black for an element that has none</summary>
+    private static Color ShadowColorOf(GtElement el) =>
+        GtShadow.First(el.Effects)?.Color ?? GtEffect.DefaultColor;
+
+    private List<(GtElement el, List<GtEffect> effects)> SnapshotEffects() =>
+        _allElements.Select(el => (el, GtEffect.CloneList(el.Effects))).ToList();
+
+    /// <summary>pushes one history entry covering every effect list that actually changed since <paramref name="snapshot"/>; whole lists are swapped rather than single properties because applying a preset deletes and re-inserts the effect</summary>
+    private void PushEffectsHistory(string description,
+                                    List<(GtElement el, List<GtEffect> effects)> snapshot)
+    {
+        if (History is null) return;
+
+        var after = snapshot.Select(x => GtEffect.CloneList(x.el.Effects)).ToList();
+        bool changed = false;
+        for (int i = 0; i < snapshot.Count; i++)
+            if (!GtEffect.ListsEqual(snapshot[i].effects, after[i])) { changed = true; break; }
+        if (!changed) return;
+
+        History.Push(new PropertyChangeAction(description,
+            () => { for (int i = 0; i < snapshot.Count; i++)
+                        snapshot[i].el.Effects = GtEffect.CloneList(snapshot[i].effects); },
+            () => { for (int i = 0; i < snapshot.Count; i++)
+                        snapshot[i].el.Effects = GtEffect.CloneList(after[i]); }));
+    }
+
+    private void PushShadowHistory(string description)
+    {
+        if (_pickerShadowSnapshot is null) return;
+        PushEffectsHistory(description, _pickerShadowSnapshot);
+        _pickerShadowSnapshot = null;
+    }
+
+    private void ShadowPresetBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_updating || _currentElement is null) return;
+
+        int index = ShadowPresetBox.SelectedIndex;
+        // "Custom" is a readout, not a command: it names the numbers already in the boxes, so
+        // selecting it leaves the shadow exactly as it is
+        if (index < 0 || index >= GtShadow.Presets.Count) return;
+
+        var preset   = GtShadow.Presets[index];
+        var snapshot = SnapshotEffects();
+        foreach (var el in _allElements)
+            GtShadow.Apply(el.Effects, preset, ShadowColorOf(el));
+
+        PushEffectsHistory($"Shadow {preset.Name}", snapshot);
+        RefreshShadowControls();
+        Apply();
+    }
+
+    private void ShadowBlurBox_ValueChanged(object? sender, NumericUpDownValueChangedEventArgs e)
+    {
+        if (_updating || _currentElement is null) return;
+        SetShadowGeometry(blur: (double)(e.NewValue ?? 0m));
+    }
+
+    private void ShadowOffsetBox_ValueChanged(object? sender, NumericUpDownValueChangedEventArgs e)
+    {
+        if (_updating || _currentElement is null) return;
+        SetShadowGeometry(
+            offsetX: (double)(ShadowOffsetXBox.Value ?? 0m),
+            offsetY: (double)(ShadowOffsetYBox.Value ?? 0m));
+    }
+
+    /// <summary>writes the given parts of the shadow's geometry onto every selected element, leaving the parts not passed at whatever that element already had; the whole thing going to zero removes the effect, the same way picking "None" does</summary>
+    private void SetShadowGeometry(double? offsetX = null, double? offsetY = null, double? blur = null)
+    {
+        foreach (var el in _allElements)
+        {
+            var shadow = GtShadow.First(el.Effects);
+            GtShadow.Apply(el.Effects,
+                offsetX ?? shadow?.Offset.X   ?? 0,
+                offsetY ?? shadow?.Offset.Y   ?? 0,
+                blur    ?? shadow?.BlurAmount ?? 0,
+                shadow?.Color ?? GtEffect.DefaultColor);
+        }
+
+        RefreshShadowControls();
+        Apply();
+    }
+
+    private void ShadowColorButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_currentElement is null) return;
+        // GT's picker recolours an existing shadow and nothing else; with none to recolour it is a no-op
+        if (!_allElements.Any(el => GtShadow.First(el.Effects) is not null)) return;
+
+        _editingShadow = true;
+        EnsureColorPicker();
+        _colorPicker!.ShowGradientButton = false;
+
+        _pickerShadowSnapshot = SnapshotEffects();
+        SeedPicker(ShadowColorOf(_currentElement));
+
+        _colorPopup!.PlacementTarget = ShadowColorButton;
+        _colorPopup.IsOpen = true;
     }
 
     private void FillColorButton_Click(object? sender, RoutedEventArgs e)

@@ -29,10 +29,18 @@ Don't automatically commit to git
     `TransparentBackground`. Saved as a carrier object (`WebPagePart`) so it survives a
     round-trip through this editor, but never drawn into a video export - vMix only ever sees
     the empty rectangle it is stored as
+  - `GtEffect` - one entry of GT's generic per-object effect list (`GtElement.Effects`,
+    `GtLayer.Effects`); `GtEffectType` × `GtEffectMode`, where Mode is the pipeline *stage*
+    not the effect kind, so a shadow is `Type=Shadow, Mode=Shadow`. Defaults are omitted on
+    write and re-seeded on read, so an absent `Color` means opaque black
   - `GtBrush` - solid/gradient/bitmap; `GtBrushType`, `GtGradientStop`
   - `GtStoryboard` - animations for one vMix event. Identified by the pair `(Type, DataName)`:
     `DataName` scopes a DataChangeIn/Out storyboard to one data field, empty means any field
   - `GtPoint(X,Y)`, `GtSize(Width,Height)` - immutable records; `Location`/`Dimensions` properties have setters so assign `new GtPoint(x,y)` to mutate
+- **`GtShadow.cs`** - the only effect type that renders: GT's 12-preset gallery, `Apply` (GT's
+  destructive set-shadow semantics), `Resolve` (collapses the whole shadow stage into one
+  `GtResolvedShadow` - chained Gaussians compose exactly), and `BlurRadiusForSigma`, the single
+  place the Avalonia-radius ↔ GT-sigma conversion lives
 
 ### Services - `src/GtPlus/Services/`
 - **`GtZipReader.cs`** - reads `.gtzip` → `(GtDocument, Dictionary<string,byte[]> assets)`. Assets keyed by logical path (forward-slash normalised).
@@ -72,6 +80,11 @@ Don't automatically commit to git
     everything in export mode. When an element is `Interactive` the canvas forwards pointer,
     wheel and key events to its page instead of selecting/moving - Alt bypasses, resize handles
     still win, Escape returns the keyboard (`WebInputFocused`)
+  - Shadows: `RenderShape` wraps `RenderShapeCore` in `ctx.PushEffect` so crop, mask and opacity
+    all act on element-plus-shadow as GT's compose does. Avalonia folds an ambient opacity into
+    both the content and the effect, double-fading the shadow, so any opacity that may sit over
+    one goes through `PushComposedOpacity` (an opacity *mask*, which forces a real layer) instead
+    of `PushOpacity`
   - Ticker clock: `PlayTicker`/`PauseTicker`/`StopTicker`/`ToggleTickerPlayback`, `TickerPlaying`,
     `TickerFrame` - a 60 fps DispatcherTimer counting frames. A storyboard preview takes the
     clock over while `AnimationFrame` is set; frame 0 draws tickers at rest
