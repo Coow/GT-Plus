@@ -10,12 +10,12 @@
 
     <StackPanel Margin="18" Spacing="12">
 
-        <TextBlock Text="Export storyboard to MP4"
+        <TextBlock Text="Export storyboard to video"
                    FontSize="14"
                    FontWeight="SemiBold"
                    Foreground="#eeeeee" />
 
-        <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
+        <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto">
 
             <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,4"
                        Text="Storyboard" VerticalAlignment="Center"
@@ -55,29 +55,40 @@
             </StackPanel>
 
             <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,4"
-                       Text="Quality" VerticalAlignment="Center"
+                       Text="Format" VerticalAlignment="Center"
                        FontSize="12" Foreground="#cccccc" />
             <StackPanel Grid.Row="3" Grid.Column="1" Margin="0,4" Orientation="Horizontal" Spacing="8">
+                <ComboBox x:Name="FormatCombo" Width="248" FontSize="12"
+                          SelectionChanged="Format_Changed" />
+                <TextBlock x:Name="FormatHint"
+                           VerticalAlignment="Center"
+                           FontSize="11" Foreground="#777777" />
+            </StackPanel>
+
+            <TextBlock Grid.Row="4" Grid.Column="0" Margin="0,4"
+                       Text="Quality" VerticalAlignment="Center"
+                       FontSize="12" Foreground="#cccccc" />
+            <StackPanel Grid.Row="4" Grid.Column="1" Margin="0,4" Orientation="Horizontal" Spacing="8">
                 <ComboBox x:Name="QualityCombo" Width="120" FontSize="12" />
-                <TextBlock Text="Background" VerticalAlignment="Center"
+                <TextBlock x:Name="BackgroundLabel" Text="Background" VerticalAlignment="Center"
                            FontSize="12" Foreground="#cccccc" />
                 <ComboBox x:Name="BackgroundCombo" Width="120" FontSize="12" />
             </StackPanel>
 
-            <TextBlock Grid.Row="4" Grid.Column="0" Margin="0,4"
+            <TextBlock Grid.Row="5" Grid.Column="0" Margin="0,4"
                        Text="Save to" VerticalAlignment="Center"
                        FontSize="12" Foreground="#cccccc" />
-            <Grid Grid.Row="4" Grid.Column="1" Margin="0,4" ColumnDefinitions="*,Auto">
+            <Grid Grid.Row="5" Grid.Column="1" Margin="0,4" ColumnDefinitions="*,Auto">
                 <TextBox Grid.Column="0" x:Name="OutputBox" FontSize="12"
                          Watermark="Choose an output file..." />
                 <Button Grid.Column="1" Content="Browse..." Margin="8,0,0,0"
                         Padding="12,5" Click="Browse_Click" />
             </Grid>
 
-            <TextBlock Grid.Row="5" Grid.Column="0" Margin="0,4"
+            <TextBlock Grid.Row="6" Grid.Column="0" Margin="0,4"
                        Text="ffmpeg" VerticalAlignment="Center"
                        FontSize="12" Foreground="#cccccc" />
-            <Grid Grid.Row="5" Grid.Column="1" Margin="0,4" ColumnDefinitions="*,Auto,Auto">
+            <Grid Grid.Row="6" Grid.Column="1" Margin="0,4" ColumnDefinitions="*,Auto,Auto">
                 <TextBlock Grid.Column="0" x:Name="FfmpegText"
                            VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis"

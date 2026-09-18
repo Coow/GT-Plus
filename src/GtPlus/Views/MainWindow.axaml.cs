@@ -1376,8 +1376,8 @@ public partial class MainWindow : Window
         exportPng.Click += async (_, _) => await DoExportPng();
         FileMenu.Items.Add(exportPng);
 
-        var exportVideo = new MenuItem { Header = "Export as _Video (MP4)...", IsEnabled = hasDoc };
-        ToolTip.SetTip(exportVideo, "Render a storyboard to an MP4 file");
+        var exportVideo = new MenuItem { Header = "Export as _Video...", IsEnabled = hasDoc };
+        ToolTip.SetTip(exportVideo, "Render a storyboard to an MP4, or a transparent MOV/WebM file");
         exportVideo.Click += async (_, _) => await DoExportVideo();
         FileMenu.Items.Add(exportVideo);
 
@@ -1698,17 +1698,10 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>opens the MP4 export dialog; the dialog renders through this window's canvas, so the frames it writes are the same ones the preview draws</summary>
+    /// <summary>opens the video export dialog; the dialog renders through this window's canvas, so the frames it writes are the same ones the preview draws. A title with no storyboards (a new, unsaved one included) still opens it, as a still-frame export</summary>
     private async System.Threading.Tasks.Task DoExportVideo()
     {
-        var doc = GtCanvas.Document;
-        if (doc is null) return;
-
-        if (doc.Storyboards.Count == 0)
-        {
-            StatusText.Text = "This title has no storyboards to export";
-            return;
-        }
+        if (GtCanvas.Document is null) return;
 
         var dialog = new ExportVideoWindow(GtCanvas, _prefs, _currentPath);
         await dialog.ShowDialog(this);

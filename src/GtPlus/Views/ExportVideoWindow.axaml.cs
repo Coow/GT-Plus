@@ -90,15 +90,29 @@ public partial class ExportVideoWindow : Window
                 dataIn, dataOut, usesHold: false));
         }
 
+        // always on offer, so a title with no storyboards yet (a brand new one) can still be exported, held for the Hold seconds
+        _targets.Add(new ExportTarget("Still frame (no animation)", null));
+
         StoryboardCombo.ItemsSource = _targets;
 
         // default to the combined view, on its own a TransitionIn ends mid-title which is rarely what someone wants out of a video file
         int combined = _targets.FindIndex(t => t.IsCombined);
-        StoryboardCombo.SelectedIndex = _targets.Count == 0 ? -1 : (combined >= 0 ? combined : 0);
+        StoryboardCombo.SelectedIndex = combined >= 0 ? combined : 0;
     }
 
     private void BuildOptionLists()
     {
+        var formats = new[]
+        {
+            new FormatOption("MP4 - H.264",                     VideoExportFormat.Mp4),
+            new FormatOption("MOV - ProRes 4444 (transparent)", VideoExportFormat.ProRes4444),
+            new FormatOption("WebM - VP9 (transparent)",        VideoExportFormat.WebM),
+        };
+        FormatCombo.ItemsSource = formats;
+        int formatIndex = Array.FindIndex(formats,
+            f => string.Equals(f.Format.ToString(), _prefs.ExportFormat, StringComparison.OrdinalIgnoreCase));
+        FormatCombo.SelectedIndex = formatIndex >= 0 ? formatIndex : 0;
+
         var rates = new[] { 24, 25, 30, 50, 60 };
         FpsCombo.ItemsSource = rates;
         int fpsIndex = Array.IndexOf(rates, _prefs.ExportFps);
@@ -125,6 +139,8 @@ public partial class ExportVideoWindow : Window
         int bgIndex = Array.FindIndex(backgrounds,
             b => string.Equals(b.Label, _prefs.ExportBackground, StringComparison.OrdinalIgnoreCase));
         BackgroundCombo.SelectedIndex = bgIndex >= 0 ? bgIndex : 0;
+
+        RefreshFormat();
     }
 
     private ExportTarget? SelectedTarget => StoryboardCombo.SelectedItem as ExportTarget;
@@ -139,9 +155,32 @@ public partial class ExportVideoWindow : Window
     private BackgroundOption BackgroundChoice =>
         BackgroundCombo.SelectedItem as BackgroundOption ?? new BackgroundOption("Black", Colors.Black);
 
+    private VideoExportFormat Format =>
+        (FormatCombo.SelectedItem as FormatOption)?.Format ?? VideoExportFormat.Mp4;
+
     private void Storyboard_Changed(object? sender, SelectionChangedEventArgs e) => RefreshSummary();
     private void Fps_Changed(object? sender, SelectionChangedEventArgs e) => RefreshSummary();
     private void Hold_Changed(object? sender, NumericUpDownValueChangedEventArgs e) => RefreshSummary();
+
+    private void Format_Changed(object? sender, SelectionChangedEventArgs e)
+    {
+        RefreshFormat();
+        if (_suppressEvents) return;
+
+        // keep the output name, swap its extension to match the container
+        var current = OutputBox.Text?.Trim();
+        if (!string.IsNullOrEmpty(current))
+            OutputBox.Text = Path.ChangeExtension(current, Format.Extension());
+    }
+
+    /// <summary>an alpha format keeps the title's own transparency, so there is no background to pick</summary>
+    private void RefreshFormat()
+    {
+        bool alpha = Format.HasAlpha();
+        BackgroundLabel.Opacity = alpha ? 0.4 : 1;
+        BackgroundCombo.IsEnabled = !_busy && !alpha;
+        FormatHint.Text = alpha ? "keeps the alpha channel" : "";
+    }
 
     private void RefreshSummary()
     {
@@ -152,7 +191,9 @@ public partial class ExportVideoWindow : Window
 
         HoldHint.Text = target is null || target.IsCombined
             ? "seconds the title stays up between the in and out halves"
-            : "extra seconds held on the final frame";
+            : target.IsStill
+                ? "seconds of video"
+                : "extra seconds held on the final frame";
 
         if (target is null || doc is null)
         {
@@ -259,7 +300,8 @@ public partial class ExportVideoWindow : Window
             ? Path.GetDirectoryName(_documentPath)
             : Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
 
-        return string.IsNullOrEmpty(folder) ? name + ".mp4" : Path.Combine(folder!, name + ".mp4");
+        var file = name + "." + Format.Extension();
+        return string.IsNullOrEmpty(folder) ? file : Path.Combine(folder!, file);
     }
 
     private async void Browse_Click(object? sender, RoutedEventArgs e)
@@ -276,16 +318,17 @@ public partial class ExportVideoWindow : Window
         }
         catch { /* a bad path just means no start folder */ }
 
+        var extension = Format.Extension();
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = "Export Video",
-            SuggestedFileName = Path.GetFileName(suggested),
+            SuggestedFileName = Path.GetFileName(Path.ChangeExtension(suggested, extension)),
             SuggestedStartLocation = startIn,
             FileTypeChoices = new[]
             {
-                new FilePickerFileType("MP4 Video") { Patterns = new[] { "*.mp4" } }
+                new FilePickerFileType($"{extension.ToUpperInvariant()} Video") { Patterns = new[] { "*." + extension } }
             },
-            DefaultExtension = "mp4"
+            DefaultExtension = extension
         });
 
         var path = file?.TryGetLocalPath();
@@ -316,7 +359,7 @@ public partial class ExportVideoWindow : Window
             return;
         }
 
-        if (!target.Main.HasAnimations && !(target.Tail?.HasAnimations ?? false))
+        if (!target.IsStill && !target.Main!.HasAnimations && !(target.Tail?.HasAnimations ?? false))
             StatusText.Text = "This storyboard has no animations - exporting a still frame.";
 
         try
@@ -335,6 +378,7 @@ public partial class ExportVideoWindow : Window
         {
             OutputPath = Path.GetFullPath(output!),
             FfmpegPath = _ffmpegPath,
+            Format     = Format,
             Segments   = target.BuildSegments(hold),
             Duration   = target.DurationFor(hold),
             Fps        = Fps,
@@ -391,6 +435,7 @@ public partial class ExportVideoWindow : Window
         _prefs.ExportHoldSeconds = hold;
         _prefs.ExportCrf         = Quality.Crf;
         _prefs.ExportBackground  = BackgroundChoice.Label;
+        _prefs.ExportFormat      = Format.ToString();
         if (_ffmpegPath is not null) _prefs.FfmpegPath = _ffmpegPath;
         _prefs.Save();
     }
@@ -404,7 +449,8 @@ public partial class ExportVideoWindow : Window
         HoldBox.IsEnabled         = !_busy;
         FpsCombo.IsEnabled        = !_busy;
         QualityCombo.IsEnabled    = !_busy;
-        BackgroundCombo.IsEnabled = !_busy;
+        FormatCombo.IsEnabled     = !_busy;
+        BackgroundCombo.IsEnabled = !_busy && !Format.HasAlpha();
         OutputBox.IsEnabled       = !_busy;
         LocateButton.IsEnabled    = !_busy;
         DownloadButton.IsEnabled  = !_busy;
@@ -437,11 +483,11 @@ public partial class ExportVideoWindow : Window
         _cts?.Cancel();
     }
 
-    /// <summary>one row of the storyboard picker, a single storyboard or the in/out pair</summary>
+    /// <summary>one row of the storyboard picker, a single storyboard, the in/out pair, or no storyboard at all (the title at rest)</summary>
     private sealed class ExportTarget
     {
         public ExportTarget(
-            string label, GtStoryboard main, GtStoryboard? tail = null, bool usesHold = true)
+            string label, GtStoryboard? main, GtStoryboard? tail = null, bool usesHold = true)
         {
             Label    = label;
             Main     = main;
@@ -450,9 +496,10 @@ public partial class ExportVideoWindow : Window
         }
 
         public string Label { get; }
-        public GtStoryboard Main { get; }
+        public GtStoryboard? Main { get; }
         public GtStoryboard? Tail { get; }
 
+        public bool IsStill => Main is null;
         public bool IsCombined => Tail is not null;
 
         /// <summary>whether the hold sits between the two halves; it does for a transition pair (the template stays live in between) but not for a DataChange pair which vMix runs back-to-back, where the hold becomes a freeze on the final frame instead</summary>
@@ -461,13 +508,15 @@ public partial class ExportVideoWindow : Window
         private double Gap(double hold) => IsCombined && UsesHold ? hold : 0;
 
         /// <summary>timeline layout for the render; the transition pair puts the out half after the in half plus the hold, anything else runs from zero and the hold becomes a freeze on the last frame which the segment list gets for free by simply running longer</summary>
-        public List<GtTimelineSegment> BuildSegments(double hold) => IsCombined
-            ? new List<GtTimelineSegment> { new(Main), new(Tail!, Main.Duration + Gap(hold)) }
-            : new List<GtTimelineSegment> { new(Main) };
+        public List<GtTimelineSegment> BuildSegments(double hold) =>
+            IsStill    ? new List<GtTimelineSegment>() :
+            IsCombined ? new List<GtTimelineSegment> { new(Main!), new(Tail!, Main!.Duration + Gap(hold)) }
+                       : new List<GtTimelineSegment> { new(Main!) };
 
-        public double DurationFor(double hold) => IsCombined
-            ? Main.Duration + Gap(hold) + Tail!.Duration + (UsesHold ? 0 : hold)
-            : Main.Duration + hold;
+        public double DurationFor(double hold) =>
+            IsStill    ? hold :
+            IsCombined ? Main!.Duration + Gap(hold) + Tail!.Duration + (UsesHold ? 0 : hold)
+                       : Main!.Duration + hold;
 
         public override string ToString() => Label;
     }
@@ -484,6 +533,20 @@ public partial class ExportVideoWindow : Window
         public string Label { get; }
         public int Crf { get; }
         public string Preset { get; }
+
+        public override string ToString() => Label;
+    }
+
+    private sealed class FormatOption
+    {
+        public FormatOption(string label, VideoExportFormat format)
+        {
+            Label  = label;
+            Format = format;
+        }
+
+        public string Label { get; }
+        public VideoExportFormat Format { get; }
 
         public override string ToString() => Label;
     }

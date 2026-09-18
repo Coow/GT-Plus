@@ -74,6 +74,8 @@ public class PreferencesService
     public int    ExportCrf         { get; set; } = 20;
     /// <summary>label of the colour an export composites the title over</summary>
     public string ExportBackground  { get; set; } = "Black";
+    /// <summary>name of the <c>VideoExportFormat</c> of the last export</summary>
+    public string ExportFormat      { get; set; } = "Mp4";
 
     // window geometry, saved as Normal-state values so Maximized restores correctly
     public int    WindowX      { get; set; } = -1;
@@ -118,6 +120,7 @@ public class PreferencesService
                 ExportHoldSeconds = Math.Clamp(data.ExportHoldSeconds, 0, 3600);
                 ExportCrf         = Math.Clamp(data.ExportCrf, 0, 51);
                 ExportBackground  = data.ExportBackground ?? "Black";
+                ExportFormat      = data.ExportFormat ?? "Mp4";
                 WindowX      = data.WindowX;
                 WindowY      = data.WindowY;
                 WindowWidth  = data.WindowWidth  > 0 ? data.WindowWidth  : 1280;
@@ -160,6 +163,7 @@ public class PreferencesService
                 ExportHoldSeconds = ExportHoldSeconds,
                 ExportCrf         = ExportCrf,
                 ExportBackground  = ExportBackground,
+                ExportFormat      = ExportFormat,
                 WindowX      = WindowX,
                 WindowY      = WindowY,
                 WindowWidth  = WindowWidth,
@@ -201,6 +205,7 @@ public class PreferencesService
         public double ExportHoldSeconds         { get; set; } = 3;
         public int    ExportCrf                 { get; set; } = 20;
         public string ExportBackground          { get; set; } = "Black";
+        public string ExportFormat              { get; set; } = "Mp4";
         public int    WindowX      { get; set; } = -1;
         public int    WindowY      { get; set; } = -1;
         public double WindowWidth  { get; set; } = 1280;
