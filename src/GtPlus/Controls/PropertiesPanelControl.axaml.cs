@@ -244,6 +244,38 @@ public partial class PropertiesPanelControl : UserControl
         base.OnAttachedToVisualTree(e);
         if (_fontNames.Count == 0)
             LoadFonts();
+        EnsureBarHeightComputed();
+    }
+
+    private bool _barHeightComputed;
+
+    private void EnsureBarHeightComputed()
+    {
+        if (_barHeightComputed)
+            return;
+        _barHeightComputed = true;
+
+        var sections = new Control[]
+        {
+            TextSpecificPanel, FillStrokePanel, ImagePanel, WebPanel, TickerPanel,
+            ObjectRefPanel, DataFlagsPanel, CropPanel, ShadowPanel, OpacityPanel,
+        };
+        var saved = sections.Select(s => s.IsVisible).ToArray();
+        foreach (var s in sections)
+            s.IsVisible = true;
+
+        var savedScrollVisibility = PropertiesScroll.HorizontalScrollBarVisibility;
+        PropertiesScroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Visible;
+
+        Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var height = DesiredSize.Height;
+
+        for (var i = 0; i < sections.Length; i++)
+            sections[i].IsVisible = saved[i];
+        PropertiesScroll.HorizontalScrollBarVisibility = savedScrollVisibility;
+
+        if (height > PropertiesBar.MinHeight)
+            PropertiesBar.MinHeight = height;
     }
 
     private void LoadFonts()

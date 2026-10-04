@@ -227,15 +227,17 @@
 
     </UserControl.Styles>
 
-    <!-- fixed 80px: the bar must not grow or collapse as sections come and go -->
-    <Border Background="#1a1a1a"
+    <Border x:Name="PropertiesBar"
+            Background="#1a1a1a"
             BorderBrush="#333333"
             BorderThickness="0,0,0,1"
-            MinHeight="80" MaxHeight="80">
+            MinHeight="80">
 
         <!-- columns [left sections][spacer][right sections]: the star spacer pushes crop/feather + opacity to the right edge while the window is wide enough, and collapses to zero once the bar overflows so the ScrollViewer takes over -->
-        <ScrollViewer HorizontalScrollBarVisibility="Auto"
-                      VerticalScrollBarVisibility="Disabled">
+        <ScrollViewer x:Name="PropertiesScroll"
+                      HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Disabled"
+                      AllowAutoHide="False">
             <Grid ColumnDefinitions="Auto,*,Auto" Margin="6,4">
 
                 <StackPanel Grid.Column="0"

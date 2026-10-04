@@ -38,6 +38,47 @@ public class GtCanvasControl : Control
         Focusable = true;
     }
 
+    private DispatcherTimer? _clockTimer;
+
+    /// <summary>a text object's <c>{0:FORMAT}</c> preview (see <see cref="GtTextFormat"/>) reads the
+    /// wall clock, so it needs its own repaint tick independent of the ticker transport and of any
+    /// gesture-driven InvalidateVisual; runs whenever the control is on screen and stops itself
+    /// rather than repainting every frame when nothing in the document actually uses the placeholder</summary>
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        _clockTimer ??= CreateClockTimer();
+        _clockTimer.Start();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        _clockTimer?.Stop();
+    }
+
+    private DispatcherTimer CreateClockTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+        timer.Tick += (_, _) =>
+        {
+            if (HasLiveTextPlaceholder()) InvalidateVisual();
+        };
+        return timer;
+    }
+
+    /// <summary>true when some text object's (or ticker template's) raw text carries vMix's <c>{0}</c>
+    /// placeholder, so the clock timer has a reason to keep repainting this document</summary>
+    private bool HasLiveTextPlaceholder()
+    {
+        if (_document is null) return false;
+        foreach (var layer in _document.Layers)
+            foreach (var element in layer.Elements)
+                if (element is GtTextBlock tb && tb.Text.Contains("{0", StringComparison.Ordinal))
+                    return true;
+        return false;
+    }
+
     private void OnCanvasDoubleTapped(object? sender, TappedEventArgs e)
     {
         if (IsPreviewing || _document is null) return;
@@ -2190,7 +2231,7 @@ public class GtCanvasControl : Control
     private static Geometry BuildRestMaskGeometry(GtElement maskEl)
     {
         // a ticker draws clones of its text not the text itself, and what is on screen depends on the frame, so it masks by its box like a rectangle does
-        if (maskEl is GtTextBlock tb && maskEl is not GtTickerElement && !string.IsNullOrEmpty(tb.Text))
+        if (maskEl is GtTextBlock tb && maskEl is not GtTickerElement && !string.IsNullOrEmpty(GtTextFormat.Resolve(tb.Text)))
         {
             var bounds = new Rect(tb.Location.X, tb.Location.Y, tb.Dimensions.Width, tb.Dimensions.Height);
             if (BuildTextMaskGeometry(tb, bounds) is { } glyphs) return glyphs;
@@ -2213,7 +2254,8 @@ public class GtCanvasControl : Control
     /// <summary>glyph outlines for a text mask, laid out through the same pipeline <see cref="RenderTextBlock"/> uses, so line spacing, wrapping, uppercase, the auto-size coercions, the overhang nudge and the stroke all put the mask exactly where the text draws; a one-shot FormattedText cannot do that since GT's LineSpacing divorces the line box from the font's and moves every line including the first (see <see cref="LineBox"/>). Returns null when the block lays out to nothing</summary>
     private static Geometry? BuildTextMaskGeometry(GtTextBlock tb, Rect bounds)
     {
-        var text     = tb.Uppercase ? tb.Text.ToUpper() : tb.Text;
+        var resolved = GtTextFormat.Resolve(tb.Text);
+        var text     = tb.Uppercase ? resolved.ToUpper() : resolved;
         var typeface = new Typeface(new FontFamily(tb.FontFamily), tb.FontStyle, tb.FontWeight);
 
         var plan = ResolveTextPlan(tb, text, typeface, bounds);
@@ -3251,7 +3293,8 @@ public class GtCanvasControl : Control
     {
         if (string.IsNullOrEmpty(tb.Text)) return;
 
-        var text      = tb.Uppercase ? tb.Text.ToUpper() : tb.Text;
+        var resolved  = GtTextFormat.Resolve(tb.Text);
+        var text      = tb.Uppercase ? resolved.ToUpper() : resolved;
         var typeface  = new Typeface(new FontFamily(tb.FontFamily), tb.FontStyle, tb.FontWeight);
         var fillBrush = MakeBrush(tb.Fill) ?? new SolidColorBrush(Colors.White);
 
@@ -3283,7 +3326,7 @@ public class GtCanvasControl : Control
         double screenLength = vertical ? bounds.Height : bounds.Width;
         if (screenLength <= 0) return;
 
-        var chunks  = TickerLayout.Split(ticker.Text, vertical);
+        var chunks  = TickerLayout.Split(GtTextFormat.Resolve(ticker.Text), vertical);
         var lengths = new double[chunks.Count];
         for (int i = 0; i < chunks.Count; i++)
             lengths[i] = MeasureChunk(ticker, chunks[i], bounds, vertical);
@@ -3490,7 +3533,8 @@ public class GtCanvasControl : Control
     private static Size MeasureAutoDimensions(GtTextBlock tb)
     {
         var bounds   = new Rect(0, 0, tb.Dimensions.Width, tb.Dimensions.Height);
-        var text     = tb.Uppercase ? tb.Text.ToUpper() : tb.Text;
+        var resolved = GtTextFormat.Resolve(tb.Text);
+        var text     = tb.Uppercase ? resolved.ToUpper() : resolved;
         var typeface = new Typeface(new FontFamily(tb.FontFamily), tb.FontStyle, tb.FontWeight);
         var plan     = ResolveTextPlan(tb, text, typeface, bounds);
 
