@@ -28,6 +28,16 @@ public sealed class GtAnimOverride
     public double RotateY { get; set; }
     public double RotateZ { get; set; }
 
+    public double BoundOffsetX { get; set; }
+    public double BoundOffsetY { get; set; }
+    public double BoundScaleX  { get; set; } = 1.0;
+    public double BoundScaleY  { get; set; } = 1.0;
+    public double BoundAnchorX { get; set; } = 0.5;
+    public double BoundAnchorY { get; set; } = 0.5;
+
+    public bool HasBoundTransform =>
+        BoundOffsetX != 0 || BoundOffsetY != 0 || BoundScaleX != 1.0 || BoundScaleY != 1.0;
+
     /// <summary>true when the target is fully suppressed for the whole storyboard</summary>
     public bool Hidden { get; set; }
 
@@ -136,6 +146,7 @@ public static class GtAnimationEvaluator
         var frame = new GtAnimationFrame { Time = time };
         if (storyboard is not null)
             Accumulate(frame, document, storyboard, time, storyboard.PlaysRewound);
+        GtBoundingResolver.ApplyToFrame(frame, document);
         return frame;
     }
 
@@ -167,6 +178,8 @@ public static class GtAnimationEvaluator
             if (phase is not null) frame.Absorb(phase);
         }
 
+        // bound elements follow their source's animated box, resolved once over the combined frame so a handover between phases carries them too
+        GtBoundingResolver.ApplyToFrame(frame, document);
         return frame;
     }
 
@@ -290,6 +303,8 @@ public static class GtAnimationEvaluator
                 // offsets accumulate, an in/out pair is at rest (0,0) in the middle
                 o.OffsetX += dx * (1.0 - rest);
                 o.OffsetY += dy * (1.0 - rest);
+                o.BoundOffsetX += dx * (1.0 - rest);
+                o.BoundOffsetY += dy * (1.0 - rest);
                 break;
             }
 
@@ -298,11 +313,13 @@ public static class GtAnimationEvaluator
                 // GT builds a Fly and then adds a second animation on Location.Y applied after it each frame, so the fly supplies X while the overshoot owns Y outright whatever the direction's vertical component would have been
                 var (dx, _) = FlyFromDelta(dir, box, docW, docH);
                 o.OffsetX += dx * (1.0 - rest);
+                o.BoundOffsetX += dx * (1.0 - rest);
 
                 // the overshoot forces its own curve, BounceOut forwards, BounceIn reversed
                 double bounceEased = (reversed ? BounceIn : BounceOut).Ease(raw);
                 double bounceRest  = reversed ? 1.0 - bounceEased : bounceEased;
                 o.OffsetY += -box.Height * BounceOvershoot * (1.0 - bounceRest);
+                o.BoundOffsetY += -box.Height * BounceOvershoot * (1.0 - bounceRest);
                 break;
             }
 
@@ -311,6 +328,10 @@ public static class GtAnimationEvaluator
                 // GT lerps Dimensions from a collapsed size and Location from the matching corner, together that is exactly a scale pinned at that corner
                 var (collapseX, collapseY, ax, ay) = ExpandAnchor(dir);
                 ApplyScale(o, collapseX ? rest : 1.0, collapseY ? rest : 1.0, ax, ay);
+                o.BoundScaleX *= collapseX ? rest : 1.0;
+                o.BoundScaleY *= collapseY ? rest : 1.0;
+                o.BoundAnchorX = ax;
+                o.BoundAnchorY = ay;
                 break;
             }
 
@@ -342,6 +363,8 @@ public static class GtAnimationEvaluator
                 var (fx, fy, tx, ty) = ScrollPath(dir, box, docW, docH);
                 o.OffsetX += Lerp(fx, tx, rest) - box.Left;
                 o.OffsetY += Lerp(fy, ty, rest) - box.Top;
+                o.BoundOffsetX += Lerp(fx, tx, rest) - box.Left;
+                o.BoundOffsetY += Lerp(fy, ty, rest) - box.Top;
                 break;
             }
 

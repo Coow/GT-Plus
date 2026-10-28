@@ -65,6 +65,82 @@ public static class GtBoundingResolver
         return changed;
     }
 
+    public static void ApplyToFrame(GtAnimationFrame frame, GtDocument document)
+    {
+        if (frame.IsEmpty) return;
+
+        foreach (var layer in document.Layers)
+        {
+            Dictionary<string, GtElement>? names = null;
+
+            foreach (var element in layer.Elements)
+            {
+                var bounding = element.Bounding;
+                if (bounding is null || !bounding.HasSource) continue;
+                if (!element.Visible || element.Opacity <= 0) continue;
+
+                names ??= BuildNameMap(layer);
+                if (!names.TryGetValue(bounding.Object!, out var source)) continue;
+                if (ReferenceEquals(source, element)) continue;
+                if (source.Bounding is { HasSource: true }) continue;
+
+                var sourceAnim = frame.ForElement(source);
+                var own        = frame.ForElement(element);
+                bool follows   = sourceAnim is { HasBoundTransform: true };
+                bool overrides = own is { HasBoundTransform: true };
+                if (!follows && !overrides) continue;
+
+                double sx = source.Location.X, sy = source.Location.Y;
+                double sw = source.Dimensions.Width, sh = source.Dimensions.Height;
+                if (follows)
+                {
+                    sx += sourceAnim!.BoundOffsetX;
+                    sy += sourceAnim.BoundOffsetY;
+                    if (sourceAnim.BoundScaleX != 1.0 || sourceAnim.BoundScaleY != 1.0)
+                    {
+                        double ax = sx + sw * sourceAnim.BoundAnchorX;
+                        double ay = sy + sh * sourceAnim.BoundAnchorY;
+                        sw *= sourceAnim.BoundScaleX;
+                        sh *= sourceAnim.BoundScaleY;
+                        sx = ax - sw * sourceAnim.BoundAnchorX;
+                        sy = ay - sh * sourceAnim.BoundAnchorY;
+                    }
+                }
+
+                double tx = sx - bounding.PaddingLeft;
+                double ty = sy - bounding.PaddingTop;
+                double tw = Math.Max(1, sw + bounding.PaddingLeft + bounding.PaddingRight);
+                double th = Math.Max(1, sh + bounding.PaddingTop  + bounding.PaddingBottom);
+
+                var o = frame.GetOrAddElement(element);
+
+                double ox  = o.OffsetX - o.BoundOffsetX;
+                double oy  = o.OffsetY - o.BoundOffsetY;
+                double osx = o.BoundScaleX != 0 ? o.ScaleX / o.BoundScaleX : 1.0;
+                double osy = o.BoundScaleY != 0 ? o.ScaleY / o.BoundScaleY : 1.0;
+
+                tx += ox;
+                ty += oy;
+                if (osx != 1.0 || osy != 1.0)
+                {
+                    double cx = tx + tw / 2, cy = ty + th / 2;
+                    tw *= osx;
+                    th *= osy;
+                    tx = cx - tw / 2;
+                    ty = cy - th / 2;
+                }
+
+                var (restLoc, restDim) = Resolve(source, bounding);
+                o.ScaleAnchorX = 0;
+                o.ScaleAnchorY = 0;
+                o.OffsetX = tx - restLoc.X;
+                o.OffsetY = ty - restLoc.Y;
+                o.ScaleX  = tw / restDim.Width;
+                o.ScaleY  = th / restDim.Height;
+            }
+        }
+    }
+
     /// <summary>the box a destination would take from <paramref name="source"/> without writing it; used by the properties panel to show what a binding is about to do</summary>
     public static (GtPoint Location, GtSize Dimensions) Resolve(GtElement source, GtBounding bounding) =>
         (new GtPoint(source.Location.X - bounding.PaddingLeft,
