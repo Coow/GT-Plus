@@ -540,15 +540,7 @@ public class GtZipReader
         var raw = el.Attribute("Text")?.Value ?? defaultText;
         tb.FontFamily = el.Attribute("FontFamily")?.Value ?? "Arial";
         tb.FontSize = ParseDouble(el.Attribute("FontSize")?.Value, 36);
-        tb.FontWeight = el.Attribute("FontWeight")?.Value switch
-        {
-            "Bold" => FontWeight.Bold,
-            "Light" => FontWeight.Light,
-            "Thin" => FontWeight.Thin,
-            "SemiBold" => FontWeight.SemiBold,
-            // vMix writes "Regular" for the 400 weight, "Normal" tolerated for files written by older versions of this editor
-            _ => FontWeight.Normal
-        };
+        tb.FontWeight = GtFontWeights.Parse(el.Attribute("FontWeight")?.Value);
         tb.TextAlign = el.Attribute("TextAlign")?.Value switch
         {
             "Center" => GtTextAlign.Center,

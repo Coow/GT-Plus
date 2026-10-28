@@ -575,12 +575,5 @@ public class GtZipWriter
 
     private static string ColorStr(Color c) => $"#{c.A:X2}{c.R:X2}{c.G:X2}{c.B:X2}";
 
-    private static string SerializeFontWeight(FontWeight w) => w switch
-    {
-        FontWeight.Bold     => "Bold",
-        FontWeight.Light    => "Light",
-        FontWeight.Thin     => "Thin",
-        FontWeight.SemiBold => "SemiBold",
-        _                   => "Regular"
-    };
+    private static string SerializeFontWeight(FontWeight w) => GtFontWeights.ToName(w);
 }

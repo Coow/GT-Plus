@@ -1438,11 +1438,11 @@ public partial class MainWindow : Window
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Open vMix GT Template",
+            Title = "Open GT Template",
             AllowMultiple = false,
             FileTypeFilter = new[]
             {
-                new FilePickerFileType("vMix GT Template") { Patterns = new[] { "*.gtzip" } },
+                new FilePickerFileType("GT Template") { Patterns = new[] { "*.gtzip" } },
                 new FilePickerFileType("All Files")        { Patterns = new[] { "*.*"     } }
             }
         });
@@ -1617,13 +1617,13 @@ public partial class MainWindow : Window
 
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title = "Save vMix GT Template",
+            Title = "Save GT Template",
             SuggestedFileName = _currentPath is not null
                 ? Path.GetFileName(_currentPath)
                 : "template.gtzip",
             FileTypeChoices = new[]
             {
-                new FilePickerFileType("vMix GT Template") { Patterns = new[] { "*.gtzip" } }
+                new FilePickerFileType("GT Template") { Patterns = new[] { "*.gtzip" } }
             },
             DefaultExtension = "gtzip"
         });
@@ -1634,7 +1634,7 @@ public partial class MainWindow : Window
         if (SaveToPath(path))
         {
             _currentPath = path;
-            Title = $"vMix GT+  -  {Path.GetFileName(path)}";
+            Title = $"GT+  -  {Path.GetFileName(path)}";
             _recent.Add(path);
             RebuildFileMenu();
         }
@@ -1771,7 +1771,7 @@ public partial class MainWindow : Window
         UpdateRulerSelection();
 
         StatusText.Text = $"New document  ·  {width}×{height}";
-        Title = "vMix GT+  -  (new)";
+        Title = "GT+  -  (new)";
         Avalonia.Threading.Dispatcher.UIThread.Post(RebuildFileMenu, Avalonia.Threading.DispatcherPriority.Background);
     }
 

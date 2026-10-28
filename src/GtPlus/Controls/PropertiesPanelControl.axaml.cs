@@ -304,18 +304,9 @@ public partial class PropertiesPanelControl : UserControl
             FontWeightBox.Items.Add(w);
     }
 
-    private static readonly WeightEntry[] _weightEntries = new[]
-    {
-        new WeightEntry("Thin (100)",       FontWeight.Thin),
-        new WeightEntry("ExtraLight (200)", FontWeight.ExtraLight),
-        new WeightEntry("Light (300)",      FontWeight.Light),
-        new WeightEntry("Regular (400)",    FontWeight.Normal),
-        new WeightEntry("Medium (500)",     FontWeight.Medium),
-        new WeightEntry("SemiBold (600)",   FontWeight.SemiBold),
-        new WeightEntry("Bold (700)",       FontWeight.Bold),
-        new WeightEntry("ExtraBold (800)",  FontWeight.ExtraBold),
-        new WeightEntry("Black (900)",      FontWeight.Black),
-    };
+    private static readonly WeightEntry[] _weightEntries = GtFontWeights.All
+        .Select(e => new WeightEntry($"{e.Name} ({(int)e.Weight})", e.Weight))
+        .ToArray();
 
     /// <summary>pass the full selection; position/size shows the primary element's values with the delta applied to all on change, and the text panel is enabled only when all selected are GtTextBlock (changes apply to all text blocks in the selection); pass an empty collection to clear/disable everything</summary>
     /// <param name="layer">layer owning the selection, used for the mask-object list; pass null to disable it</param>
@@ -399,7 +390,7 @@ public partial class PropertiesPanelControl : UserControl
                 UppercaseButton.IsChecked = tb.Uppercase;
 
                 FontWeightBox.SelectedItem = _weightEntries.FirstOrDefault(w => w.Weight == tb.FontWeight)
-                    ?? _weightEntries[3];
+                    ?? _weightEntries.First(w => w.Weight == FontWeight.Normal);
 
                 HAlignLeftButton.IsChecked   = tb.TextAlign == GtTextAlign.Left;
                 HAlignCenterButton.IsChecked = tb.TextAlign == GtTextAlign.Center;

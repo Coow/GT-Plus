@@ -396,6 +396,45 @@ public enum GtAutoSize
     WidthAndHeight = 4
 }
 
+/// <summary>vMix's font weight names and values, the only spellings GT reads/writes in the FontWeight attribute.
+/// Book (325) has no Avalonia name, so it is a cast</summary>
+public static class GtFontWeights
+{
+    public static readonly (string Name, FontWeight Weight)[] All =
+    {
+        ("Thin",       FontWeight.Thin),
+        ("ExtraLight", FontWeight.ExtraLight),
+        ("Light",      FontWeight.Light),
+        ("Book",       (FontWeight)325),
+        ("SemiLight",  FontWeight.SemiLight),
+        ("Regular",    FontWeight.Normal),
+        ("Medium",     FontWeight.Medium),
+        ("DemiBold",   FontWeight.SemiBold),
+        ("Bold",       FontWeight.Bold),
+        ("ExtraBold",  FontWeight.ExtraBold),
+        ("Black",      FontWeight.Black),
+        ("ExtraBlack", FontWeight.ExtraBlack),
+    };
+
+    /// <summary>"Normal" and "SemiBold" tolerated for files written by older versions of this editor; anything unknown is Regular</summary>
+    public static FontWeight Parse(string? name)
+    {
+        if (name is null) return FontWeight.Normal;
+        foreach (var (n, w) in All)
+            if (string.Equals(n, name, StringComparison.OrdinalIgnoreCase)) return w;
+        return name.Equals("SemiBold", StringComparison.OrdinalIgnoreCase) ? FontWeight.SemiBold : FontWeight.Normal;
+    }
+
+    /// <summary>a weight off the table is written as the nearest vMix name</summary>
+    public static string ToName(FontWeight weight)
+    {
+        var best = All[5];
+        foreach (var e in All)
+            if (Math.Abs((int)e.Weight - (int)weight) < Math.Abs((int)best.Weight - (int)weight)) best = e;
+        return best.Name;
+    }
+}
+
 public class GtTextBlock : GtElement
 {
     public string Text { get; set; } = "";

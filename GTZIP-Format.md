@@ -237,7 +237,7 @@ The inner `<Composition>` has its own `Width`/`Height` - this is the coordinate 
 | `Text`             | string                          | Default/static text content; newlines encoded as `&#xD;&#xA;` (CRLF) in the XML attribute |
 | `FontFamily`       | string                          | Font name                                                  |
 | `FontSize`         | float                           | Font size in points                                        |
-| `FontWeight`       | `Bold`, `Regular`, ...       | Font weight (vMix uses `Regular`, not `Normal`, for 400)   |
+| `FontWeight`       | `Thin`, `ExtraLight`, `Light`, `Book`, `SemiLight`, `Regular`, `Medium`, `DemiBold`, `Bold`, `ExtraBold`, `Black`, `ExtraBlack` | Font weight: 100, 200, 300, 325, 350, 400, 500, 600, 700, 800, 900, 950 (vMix uses `Regular`, not `Normal`, for 400 and `DemiBold`, not `SemiBold`, for 600) |
 | `TextAlign`        | `Left`, `Center`, `Right` | Horizontal alignment                                       |
 | `VerticalAlign`    | `Top`, `Center`, `Bottom` | Vertical alignment                                         |
 | `TextEffect`       | `Uppercase`, ...              | Text transform effects                                     |
