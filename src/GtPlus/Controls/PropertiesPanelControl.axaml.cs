@@ -21,7 +21,24 @@ public partial class PropertiesPanelControl : UserControl
     private GtElement? _currentElement;                                          // primary (first selected)
     private IReadOnlyList<GtElement> _allElements = Array.Empty<GtElement>();
     private GtLayer? _currentLayer;                                              // layer owning the selection
+    private GtLayer? _selectedLayer;                                             // a whole layer selected instead of elements
     private bool _updating;
+
+    /// <summary>a layer's doc-space frame size; files in the wild carry layers with no Dimensions and the canvas owns the fallback that stands in for them, so the host supplies it</summary>
+    public Func<GtLayer, Size>? LayerFrameSize { get; set; }
+
+    private Size LayerFrame(GtLayer layer) =>
+        LayerFrameSize?.Invoke(layer) ?? new Size(layer.Dimensions.Width, layer.Dimensions.Height);
+
+    /// <summary>where a layer frame stood before a box edit, restored whole so undo puts an implicit (zero) size back as it was</summary>
+    private sealed record LayerFrameSnapshot(GtLayer Layer, GtPoint Location, GtSize Dimensions)
+    {
+        public void Restore()
+        {
+            Layer.Location   = Location;
+            Layer.Dimensions = Dimensions;
+        }
+    }
 
     private readonly ObservableCollection<string> _fontNames = new();
     private TextBox? _fontInnerBox;
@@ -127,19 +144,23 @@ public partial class PropertiesPanelControl : UserControl
         // X/Y/W/H read and write through the element's anchor, so every one of these is the anchor point's coordinate rather than the top-left corner the file stores
         AttachNumericBehavior(XLabel, XBox,
             (el, v) => el.SetAnchorX((double)v),
-            (el)    => (decimal)el.AnchorX(),       "X position");
+            (el)    => (decimal)el.AnchorX(),       "X position",
+            layerSetter: (l, v) => SetLayerX(l, (double)v));
         AttachNumericBehavior(YLabel, YBox,
             (el, v) => el.SetAnchorY((double)v),
-            (el)    => (decimal)el.AnchorY(),       "Y position");
+            (el)    => (decimal)el.AnchorY(),       "Y position",
+            layerSetter: (l, v) => SetLayerY(l, (double)v));
         AttachNumericBehavior(ZLabel, ZBox,
             (el, v) => el.Z          = (double)v,
             (el)    => (decimal)el.Z,               "Z position");
         AttachNumericBehavior(WLabel, WBox,
             (el, v) => el.SetWidthAboutAnchor((double)v),
-            (el)    => (decimal)el.Dimensions.Width, "Width");
+            (el)    => (decimal)el.Dimensions.Width, "Width",
+            layerSetter: (l, v) => SetLayerWidth(l, (double)v));
         AttachNumericBehavior(HLabel, HBox,
             (el, v) => el.SetHeightAboutAnchor((double)v),
-            (el)    => (decimal)el.Dimensions.Height, "Height");
+            (el)    => (decimal)el.Dimensions.Height, "Height",
+            layerSetter: (l, v) => SetLayerHeight(l, (double)v));
         AttachNumericBehavior(DLabel, DBox,
             (el, v) => el.Depth      = (double)v,
             (el)    => (decimal)el.Depth,           "Depth");
@@ -312,6 +333,8 @@ public partial class PropertiesPanelControl : UserControl
     /// <param name="layer">layer owning the selection, used for the mask-object list; pass null to disable it</param>
     public void Populate(IReadOnlyCollection<GtElement> elements, GtLayer? layer = null)
     {
+        _selectedLayer  = null;
+        SetElementOnlyTransformEnabled(true);
         _allElements    = elements.ToList();
         _currentLayer   = layer;
         _currentElement = _allElements.Count > 0 ? _allElements[0] : null;
@@ -460,6 +483,50 @@ public partial class PropertiesPanelControl : UserControl
             _updating = false;
         }
     }
+
+    /// <summary>a whole layer selected: the bar empties as it does with nothing selected, then X/Y/W/H come back to drive the layer frame; a layer carries no Z, rotation or depth in the file so those stay greyed</summary>
+    public void PopulateLayer(GtLayer layer)
+    {
+        Populate(Array.Empty<GtElement>());
+        _selectedLayer = layer;
+        PositionSizePanel.IsEnabled = true;
+        SetElementOnlyTransformEnabled(false);
+        ShowLayerFrame(layer);
+    }
+
+    private void SetElementOnlyTransformEnabled(bool enabled)
+    {
+        foreach (var c in new Control[] { ZLabel, ZBox, RxLabel, RxBox, RyLabel, RyBox,
+                                          RzLabel, RzBox, DLabel, DBox })
+            c.IsEnabled = enabled;
+    }
+
+    private void ShowLayerFrame(GtLayer layer)
+    {
+        var frame = LayerFrame(layer);
+        _updating = true;
+        try
+        {
+            XBox.Value = (decimal)layer.Location.X;
+            YBox.Value = (decimal)layer.Location.Y;
+            WBox.Value = (decimal)frame.Width;
+            HBox.Value = (decimal)frame.Height;
+        }
+        finally { _updating = false; }
+    }
+
+    private static void SetLayerX(GtLayer layer, double x) =>
+        layer.Location = new GtPoint(x, layer.Location.Y);
+
+    private static void SetLayerY(GtLayer layer, double y) =>
+        layer.Location = new GtPoint(layer.Location.X, y);
+
+    // the frame grows from its top-left corner, so nothing inside moves; an implicit (zero) other axis is written out at the size it was drawn at rather than left at zero, GT has no fallback for a half-sized frame
+    private void SetLayerWidth(GtLayer layer, double w) =>
+        layer.Dimensions = new GtSize(w, LayerFrame(layer).Height);
+
+    private void SetLayerHeight(GtLayer layer, double h) =>
+        layer.Dimensions = new GtSize(LayerFrame(layer).Width, h);
 
     private void FlagHiddenCheck_Click(object? sender, RoutedEventArgs e)
         => ToggleDataFlag(GtDataFlags.Hidden, "Hidden flag");
@@ -750,7 +817,7 @@ public partial class PropertiesPanelControl : UserControl
 
     private void Apply()
     {
-        if (_updating || _currentElement is null) return;
+        if (_updating || (_currentElement is null && _selectedLayer is null)) return;
         ElementChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -759,7 +826,14 @@ public partial class PropertiesPanelControl : UserControl
 
     private void XBox_ValueChanged(object? sender, NumericUpDownValueChangedEventArgs e)
     {
-        if (_updating || _currentElement is null) return;
+        if (_updating) return;
+        if (_selectedLayer is { } layer)
+        {
+            SetLayerX(layer, (double)(e.NewValue ?? 0m));
+            Apply();
+            return;
+        }
+        if (_currentElement is null) return;
         // the box carries the primary's anchor point but the whole selection still moves by the same delta, anchors differ per element and positions must not drift apart
         var delta = (double)(e.NewValue ?? 0m) - _currentElement.AnchorX();
         foreach (var el in _allElements)
@@ -769,7 +843,14 @@ public partial class PropertiesPanelControl : UserControl
 
     private void YBox_ValueChanged(object? sender, NumericUpDownValueChangedEventArgs e)
     {
-        if (_updating || _currentElement is null) return;
+        if (_updating) return;
+        if (_selectedLayer is { } layer)
+        {
+            SetLayerY(layer, (double)(e.NewValue ?? 0m));
+            Apply();
+            return;
+        }
+        if (_currentElement is null) return;
         var delta = (double)(e.NewValue ?? 0m) - _currentElement.AnchorY();
         foreach (var el in _allElements)
             el.Location = new GtPoint(el.Location.X, el.Location.Y + delta);
@@ -787,7 +868,14 @@ public partial class PropertiesPanelControl : UserControl
 
     private void WBox_ValueChanged(object? sender, NumericUpDownValueChangedEventArgs e)
     {
-        if (_updating || _currentElement is null) return;
+        if (_updating) return;
+        if (_selectedLayer is { } layer)
+        {
+            SetLayerWidth(layer, (double)(e.NewValue ?? 1m));
+            Apply();
+            return;
+        }
+        if (_currentElement is null) return;
         // each element keeps its own anchor point fixed while it grows, so a top-left anchor still grows right and down exactly as before
         var delta = (double)(e.NewValue ?? 1m) - _currentElement.Dimensions.Width;
         foreach (var el in _allElements)
@@ -797,7 +885,14 @@ public partial class PropertiesPanelControl : UserControl
 
     private void HBox_ValueChanged(object? sender, NumericUpDownValueChangedEventArgs e)
     {
-        if (_updating || _currentElement is null) return;
+        if (_updating) return;
+        if (_selectedLayer is { } layer)
+        {
+            SetLayerHeight(layer, (double)(e.NewValue ?? 1m));
+            Apply();
+            return;
+        }
+        if (_currentElement is null) return;
         var delta = (double)(e.NewValue ?? 1m) - _currentElement.Dimensions.Height;
         foreach (var el in _allElements)
             el.SetHeightAboutAnchor(el.Dimensions.Height + delta);
@@ -1237,6 +1332,11 @@ public partial class PropertiesPanelControl : UserControl
 
     public void RefreshDimensions()
     {
+        if (_selectedLayer is { } layer)
+        {
+            ShowLayerFrame(layer);
+            return;
+        }
         if (_currentElement is null) return;
         _updating = true;
         try
@@ -1451,19 +1551,25 @@ public partial class PropertiesPanelControl : UserControl
         Apply();
     }
 
-    /// <summary>wires a NumericUpDown with three input modes, each pushing one history entry; when multiple elements are selected history is snapshot-based so undo/redo correctly restores all elements; deltaMode=true means each element gets its original value plus the primary's delta (position/size), deltaMode=false means each element gets the same absolute new value (font size etc.)</summary>
+    /// <summary>wires a NumericUpDown with three input modes, each pushing one history entry; when multiple elements are selected history is snapshot-based so undo/redo correctly restores all elements; deltaMode=true means each element gets its original value plus the primary's delta (position/size), deltaMode=false means each element gets the same absolute new value (font size etc.); a box given a <paramref name="layerSetter"/> also drives a selected layer, the others do nothing while one is selected</summary>
     private void AttachNumericBehavior(
         TextBlock? label, NumericUpDown nud,
         Action<GtElement, decimal> setter,
         Func<GtElement, decimal> getOrigValue,
         string description,
         bool deltaMode = true,
-        decimal defaultIncrement = 1m)
+        decimal defaultIncrement = 1m,
+        Action<GtLayer, decimal>? layerSetter = null)
     {
-        bool IsMulti() => _allElements.Count > 1;
-
-        List<(GtElement el, decimal ov)> TakeSnapshot() =>
-            _allElements.Select(e => (e, getOrigValue(e))).ToList();
+        // what a gesture starts from: the layer's whole frame, every element's value on a multi-selection, nothing for a single element whose box value is its value
+        object? TakeSnapshot()
+        {
+            if (_selectedLayer is { } layer)
+                return new LayerFrameSnapshot(layer, layer.Location, layer.Dimensions);
+            if (_allElements.Count > 1)
+                return _allElements.Select(e => (e, getOrigValue(e))).ToList();
+            return null;
+        }
 
         Action MakeUndo(List<(GtElement el, decimal ov)> snap) =>
             () => { foreach (var (el, ov) in snap) setter(el, ov); };
@@ -1473,15 +1579,28 @@ public partial class PropertiesPanelControl : UserControl
                 ? (Action)(() => { var d = after - before; foreach (var (el, ov) in snap) setter(el, ov + d); })
                 :          () => {                         foreach (var (el, _)  in snap) setter(el, after);   };
 
+        // undo/redo for a finished edit; null when there was nothing for this box to edit
+        (Action Undo, Action Redo)? MakeHistory(object? snap, decimal before, decimal after)
+        {
+            if (snap is LayerFrameSnapshot frame)
+                return layerSetter is null
+                    ? null
+                    : ((Action)frame.Restore, () => layerSetter(frame.Layer, after));
+            if (snap is List<(GtElement el, decimal ov)> list)
+                return (MakeUndo(list), MakeRedo(list, before, after));
+            if (_selectedLayer is not null || _currentElement is not { } el) return null;
+            return (() => setter(el, before), () => setter(el, after));
+        }
+
         // keyboard input tracking
         decimal keyboardBefore = 0m;
-        List<(GtElement el, decimal ov)>? kbSnapshot = null;
+        object? kbSnapshot = null;
 
         nud.GotFocus += (_, _) =>
         {
             if (_updating) return;
             keyboardBefore = nud.Value ?? 0m;
-            kbSnapshot = IsMulti() ? TakeSnapshot() : null;
+            kbSnapshot = TakeSnapshot();
         };
 
         nud.ValueChanged += (_, e) => { if (_updating) keyboardBefore = e.NewValue ?? 0m; };
@@ -1491,18 +1610,15 @@ public partial class PropertiesPanelControl : UserControl
             if (e.Key != Key.Escape) return;
             e.Handled = true;
 
-            var after  = nud.Value ?? 0m;
-            var before = keyboardBefore;
-            var snap   = kbSnapshot;
-            var el     = _currentElement;
-            kbSnapshot = null;
+            var after   = nud.Value ?? 0m;
+            var before  = keyboardBefore;
+            var history = after != before ? MakeHistory(kbSnapshot, before, after) : null;
+            kbSnapshot  = null;
 
-            if (after != before && el is not null)
+            if (history is { } h)
             {
-                Action discard = snap != null ? MakeUndo(snap)                  : () => setter(el, before);
-                Action restore = snap != null ? MakeRedo(snap, before, after)   : () => setter(el, after);
-                discard();
-                History?.Push(new PropertyChangeAction($"Discard {description}", restore, discard));
+                h.Undo();
+                History?.Push(new PropertyChangeAction($"Discard {description}", h.Redo, h.Undo));
             }
 
             // the model is already back where it belongs, so only the box display is left
@@ -1511,7 +1627,7 @@ public partial class PropertiesPanelControl : UserControl
             finally { _updating = false; }
             keyboardBefore = before;
 
-            if (after != before && el is not null)
+            if (history is not null)
             {
                 RefreshCropControls();   // crop/feather/opacity boxes share a slider that must follow
                 Apply();
@@ -1523,32 +1639,24 @@ public partial class PropertiesPanelControl : UserControl
         nud.LostFocus += (_, _) =>
         {
             var after = nud.Value ?? 0m;
-            if (after == keyboardBefore || _currentElement is null || History is null) return;
+            if (after == keyboardBefore || History is null) return;
             var before = keyboardBefore;
             keyboardBefore = after;
 
-            if (kbSnapshot != null)
-            {
-                var snap = kbSnapshot;
-                kbSnapshot = null;
-                History.Push(new PropertyChangeAction(description, MakeUndo(snap), MakeRedo(snap, before, after)));
-            }
-            else
-            {
-                var el = _currentElement;
-                History.Push(new PropertyChangeAction(description,
-                    () => setter(el, before), () => setter(el, after)));
-            }
+            var snap = kbSnapshot;
+            kbSnapshot = null;
+            if (MakeHistory(snap, before, after) is { } h)
+                History.Push(new PropertyChangeAction(description, h.Undo, h.Redo));
         };
 
         // spinner button: modifier increment plus history
         decimal spinnerBefore = 0m;
-        List<(GtElement el, decimal ov)>? spinnerSnapshot = null;
+        object? spinnerSnapshot = null;
 
         nud.AddHandler(PointerPressedEvent, (object? s, PointerPressedEventArgs e) =>
         {
             spinnerBefore   = nud.Value ?? 0m;
-            spinnerSnapshot = IsMulti() ? TakeSnapshot() : null;
+            spinnerSnapshot = TakeSnapshot();
             nud.Increment   = e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? 10m
                             : e.KeyModifiers.HasFlag(KeyModifiers.Alt)   ? 0.1m
                             : defaultIncrement;
@@ -1558,22 +1666,14 @@ public partial class PropertiesPanelControl : UserControl
         {
             nud.Increment = defaultIncrement;
             var after = nud.Value ?? 0m;
-            if (after == spinnerBefore || _currentElement is null || History is null) return;
+            if (after == spinnerBefore || History is null) return;
             var before = spinnerBefore;
             keyboardBefore = after;
 
-            if (spinnerSnapshot != null)
-            {
-                var snap = spinnerSnapshot;
-                spinnerSnapshot = null;
-                History.Push(new PropertyChangeAction(description, MakeUndo(snap), MakeRedo(snap, before, after)));
-            }
-            else
-            {
-                var el = _currentElement;
-                History.Push(new PropertyChangeAction(description,
-                    () => setter(el, before), () => setter(el, after)));
-            }
+            var snap = spinnerSnapshot;
+            spinnerSnapshot = null;
+            if (MakeHistory(snap, before, after) is { } h)
+                History.Push(new PropertyChangeAction(description, h.Undo, h.Redo));
         }, RoutingStrategies.Bubble);
 
         nud.AddHandler(PointerCaptureLostEvent, (_, _) => nud.Increment = defaultIncrement,
@@ -1586,7 +1686,7 @@ public partial class PropertiesPanelControl : UserControl
         bool dragging = false;
         double startX = 0;
         decimal startValue = 0;
-        List<(GtElement el, decimal ov)>? labelSnapshot = null;
+        object? labelSnapshot = null;
         CursorScrub? scrub = null;   // null on platforms that can't warp the cursor
 
         label.AddHandler(PointerPressedEvent, (object? s, PointerPressedEventArgs e) =>
@@ -1595,7 +1695,7 @@ public partial class PropertiesPanelControl : UserControl
             dragging      = true;
             startX        = e.GetPosition(label).X;
             startValue    = nud.Value ?? 0m;
-            labelSnapshot = IsMulti() ? TakeSnapshot() : null;
+            labelSnapshot = TakeSnapshot();
             scrub         = CursorScrub.Begin();
             e.Pointer.Capture(label);
             e.Handled = true;
@@ -1623,22 +1723,11 @@ public partial class PropertiesPanelControl : UserControl
             e.Pointer.Capture(null);
 
             var after = nud.Value ?? 0m;
-            if (after != startValue && _currentElement is not null && History is not null)
+            if (after != startValue && History is not null &&
+                MakeHistory(labelSnapshot, startValue, after) is { } h)
             {
-                var before = startValue;
                 keyboardBefore = after;
-
-                if (labelSnapshot != null)
-                {
-                    var snap = labelSnapshot;
-                    History.Push(new PropertyChangeAction(description, MakeUndo(snap), MakeRedo(snap, before, after)));
-                }
-                else
-                {
-                    var el = _currentElement;
-                    History.Push(new PropertyChangeAction(description,
-                        () => setter(el, before), () => setter(el, after)));
-                }
+                History.Push(new PropertyChangeAction(description, h.Undo, h.Redo));
             }
             labelSnapshot = null;
         }, RoutingStrategies.Bubble);

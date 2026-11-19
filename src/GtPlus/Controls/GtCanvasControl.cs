@@ -284,10 +284,31 @@ public class GtCanvasControl : Control
 
     private readonly Dictionary<GtElement, GtPoint> _nudgeOrigins = new(ReferenceEqualityComparer.Instance);
 
-    /// <summary>moves the unlocked part of the element selection by a doc-space delta; consecutive nudges coalesce, <see cref="CommitNudge"/> closes the run and pushes it as one move so holding an arrow key costs a single undo step instead of one per repeat</summary>
+    // the layer an open nudge run is moving and where it started; held apart from _selectedLayer so the run still commits against the right layer when the selection changes
+    private GtLayer? _nudgeLayer;
+    private GtPoint _nudgeLayerOrigin = GtPoint.Zero;
+
+    /// <summary>moves the selected layer, or the unlocked part of the element selection, by a doc-space delta; consecutive nudges coalesce, <see cref="CommitNudge"/> closes the run and pushes it as one move so holding an arrow key costs a single undo step instead of one per repeat</summary>
     public bool NudgeSelection(double dx, double dy)
     {
-        if (IsPreviewing || _selectedElements.Count == 0) return false;
+        if (IsPreviewing) return false;
+
+        if (_selectedLayer is { } layer)
+        {
+            if (layer.Locked) return false;
+            if (_nudgeLayer is null)
+            {
+                _nudgeLayer       = layer;
+                _nudgeLayerOrigin = layer.Location;
+            }
+            layer.Location = new GtPoint(layer.Location.X + dx, layer.Location.Y + dy);
+
+            InvalidateVisual();
+            SelectionChanged?.Invoke(this, EventArgs.Empty);
+            return true;
+        }
+
+        if (_selectedElements.Count == 0) return false;
 
         bool moved = false;
         foreach (var el in _selectedElements)
@@ -307,6 +328,14 @@ public class GtCanvasControl : Control
     /// <summary>closes an open nudge run, recording it in history as a single move</summary>
     public void CommitNudge()
     {
+        if (_nudgeLayer is { } layer)
+        {
+            if (History is not null &&
+                (layer.Location.X != _nudgeLayerOrigin.X || layer.Location.Y != _nudgeLayerOrigin.Y))
+                History.Push(new MoveLayerAction(layer, _nudgeLayerOrigin, layer.Location));
+            _nudgeLayer = null;
+        }
+
         if (_nudgeOrigins.Count == 0) return;
 
         if (History is not null)
@@ -1186,6 +1215,7 @@ public class GtCanvasControl : Control
 
             ApplyLayerResizeDelta(target, shiftHeld);
             InvalidateVisual();
+            TransformLive?.Invoke(this, EventArgs.Empty);
             e.Handled = true;
             return;
         }
@@ -1216,6 +1246,7 @@ public class GtCanvasControl : Control
             _selectedLayer.Location = new GtPoint(nx, ny);
 
             InvalidateVisual();
+            TransformLive?.Invoke(this, EventArgs.Empty);
             e.Handled = true;
             return;
         }
@@ -1294,9 +1325,8 @@ public class GtCanvasControl : Control
                 Cursor = HandleCursor(handle);
             }
             else if (ActiveTool == CanvasTool.Edit && _selectedLayer is { Locked: false } layer
-                     && LayerBounds(layer).Contains(docPt)
-                     && HitTest(docPt) is var (hitLayer, hitElement)
-                     && (hitElement is null || ReferenceEquals(hitLayer, layer)))
+                     && (LayerHasElementAt(layer, docPt)
+                         || (LayerBounds(layer).Contains(docPt) && HitTest(docPt).element is null)))
             {
                 Cursor = new Cursor(StandardCursorType.SizeAll);
             }
@@ -1512,6 +1542,15 @@ public class GtCanvasControl : Control
         return (null, null);
     }
 
+    /// <summary>true when a visible element of <paramref name="layer"/> covers the point, whatever is drawn above it</summary>
+    private static bool LayerHasElementAt(GtLayer layer, Point docPoint)
+    {
+        foreach (var el in layer.Elements)
+            if (el.Visible && ElementAbsBounds(layer, el).Contains(docPoint))
+                return true;
+        return false;
+    }
+
     /// <summary>rect intersection test, skips locked layers/elements (drag-box rule)</summary>
     private List<GtElement> HitTestRect(Rect docRect)
     {
@@ -1557,6 +1596,9 @@ public class GtCanvasControl : Control
         return new Rect(layer.Location.X, layer.Location.Y, w, h);
     }
 
+    /// <summary>doc-space frame of a layer as the canvas draws and edits it, the stand-in size included for a layer with no Dimensions</summary>
+    public Rect LayerFrame(GtLayer layer) => LayerBounds(layer);
+
     /// <summary>handle under the pointer on the selected layer's frame, if any</summary>
     private ResizeHandle HitTestLayerHandle(Point docPt)
     {
@@ -1593,11 +1635,14 @@ public class GtCanvasControl : Control
             return true;
         }
 
-        if (!LayerBounds(layer).Contains(docPt)) return false;
+        // the layer's own content grabs it wherever it sits, even under another layer's artwork or hanging outside the frame
+        if (!LayerHasElementAt(layer, docPt))
+        {
+            if (!LayerBounds(layer).Contains(docPt)) return false;
 
-        // content of another layer showing through this one keeps its own click: the press falls through and selects that element, as it would with no layer selected
-        var (hitLayer, hitElement) = HitTest(docPt);
-        if (hitElement is not null && !ReferenceEquals(hitLayer, layer)) return false;
+            // an empty part of the frame with another layer's content showing through keeps that content's click: the press falls through and selects it, as it would with no layer selected
+            if (HitTest(docPt).element is not null) return false;
+        }
 
         _isMovingLayer    = true;
         _moveStart        = docPt;

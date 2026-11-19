@@ -134,6 +134,7 @@ public partial class MainWindow : Window
 
         HistoryPanel.History = _history;
         PropertiesPanel.History = _history;
+        PropertiesPanel.LayerFrameSize = layer => GtCanvas.LayerFrame(layer).Size;
         _history.Changed += OnHistoryChanged;
 
         RebuildFileMenu();
@@ -354,7 +355,7 @@ public partial class MainWindow : Window
     private void OnSelectionChanged(object? sender, EventArgs e)
     {
         UpdateDebugPanel();
-        PropertiesPanel.Populate(GtCanvas.SelectedElements, SelectionLayer());
+        PopulatePropertiesPanel();
         UpdateRulerSelection();
         // GT has no layerless composition, so the last layer can never be deleted
         DeleteLayerMenuItem.IsEnabled = (GtCanvas.Document?.Layers.Count ?? 0) > 1;
@@ -928,7 +929,9 @@ public partial class MainWindow : Window
         };
 
         if (!GtCanvas.NudgeSelection(dx, dy)) return false;
-        StatusText.Text = $"Moved {GtCanvas.SelectedElements.Count} element(s) by {dx:0.##}, {dy:0.##}";
+        StatusText.Text = GtCanvas.SelectedLayer is { } layer
+            ? $"Moved layer {layer.Name} by {dx:0.##}, {dy:0.##}"
+            : $"Moved {GtCanvas.SelectedElements.Count} element(s) by {dx:0.##}, {dy:0.##}";
         return true;
     }
 
@@ -994,9 +997,17 @@ public partial class MainWindow : Window
 
     private void RefreshPropertiesPanel()
     {
-        PropertiesPanel.Populate(GtCanvas.SelectedElements, SelectionLayer());
+        PopulatePropertiesPanel();
         // the transport reflects the canvas clock, which keeps running across selection changes
         PropertiesPanel.SetTickerPlaying(GtCanvas.TickerPlaying);
+    }
+
+    private void PopulatePropertiesPanel()
+    {
+        if (GtCanvas.SelectedLayer is { } layer)
+            PropertiesPanel.PopulateLayer(layer);
+        else
+            PropertiesPanel.Populate(GtCanvas.SelectedElements, SelectionLayer());
     }
 
     /// <summary>layer owning the primary selected element; the properties bar needs it for the mask dropdown since vMix can only mask an element against a sibling in its own layer</summary>
