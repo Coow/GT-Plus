@@ -888,6 +888,9 @@ public class GtCanvasControl : Control
         return rtb;
     }
 
+    /// <summary>a press on the pasteboard around the canvas, which lies outside this control's bounds; handled exactly as one on the canvas (doc coordinates simply go negative or past the edge), and the pointer capture taken here routes the rest of the drag back to this control</summary>
+    public void HandleOutsidePress(PointerPressedEventArgs e) => OnPointerPressed(e);
+
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);

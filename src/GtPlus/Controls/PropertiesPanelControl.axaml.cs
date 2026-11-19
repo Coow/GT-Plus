@@ -1863,6 +1863,8 @@ public partial class PropertiesPanelControl : UserControl
                 IsLightDismissEnabled = true,
             };
             _colorPopup.Closed += ColorPopup_Closed;
+            // a popup outside the logical tree gets no theme, and its text boxes never get a template
+            LogicalChildren.Add(_colorPopup);
         }
 
         return _colorPicker;

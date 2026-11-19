@@ -128,6 +128,8 @@ public partial class PreferencesWindow : Window
                 IsLightDismissEnabled = true,
             };
             _colorPopup.Closed += (_, _) => ColorPickerControl.AddToRecent(_colorPicker.Color);
+            // a popup outside the logical tree gets no theme, and its text boxes never get a template
+            LogicalChildren.Add(_colorPopup);
         }
 
         // seeding the picker raises ColorChanged, which must not count as an edit

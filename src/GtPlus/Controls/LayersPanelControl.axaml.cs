@@ -33,6 +33,7 @@ public partial class LayersPanelControl : UserControl
     private Point           _dragStartPt;
     private Border?         _dropIndicator;
     private GtElement?      _pendingSelectionApply;
+    private GtElement?      _selectionAnchor;    // fixed end of a shift-click range
 
     // icon paint-drag state (click an eye/lock icon and sweep to toggle several rows)
     private enum IconKind { Visibility, Lock }
@@ -44,9 +45,25 @@ public partial class LayersPanelControl : UserControl
     private readonly HashSet<object> _paintApplied = new HashSet<object>(); // layers/elements already hit
     private readonly List<IconBtn>   _paintChanged = new List<IconBtn>();   // rows actually flipped (for undo)
 
+    // collapse state is panel-only, never saved; held by layer reference so it survives a Populate() rebuild
+    private readonly HashSet<GtLayer>             _collapsed       = new HashSet<GtLayer>();
+    private readonly Dictionary<GtLayer, Button>  _collapseButtons = new Dictionary<GtLayer, Button>();
+
+    // rows that miss the search are faded, not hidden, so the list keeps its shape
+    private const double SearchMissOpacity  = 0.3;
+    private const double SearchChildOpacity = 0.65;   // layer header whose own name misses but holds a hit
+
     public LayersPanelControl()
     {
         InitializeComponent();
+
+        SearchBox.TextChanged += (_, _) => ApplyFilter();
+        SearchBox.KeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Escape) return;
+            SearchBox.Text = string.Empty;
+            e.Handled = true;
+        };
 
         // press is taken on the tunnel pass, Button's own class handler marks the bubbling event handled so a plain `btn.PointerPressed +=` would never fire; tunnelling also keeps the press away from the row drag-reorder handlers
         LayersStack.AddHandler(PointerPressedEvent, OnPanelPointerPressed,
@@ -75,6 +92,7 @@ public partial class LayersPanelControl : UserControl
         LayersStack.Children.Clear();
         _allRows.Clear();
         _iconButtons.Clear();
+        _collapseButtons.Clear();
         CancelPaint();
         CancelRename();
         _dropIndicator         = null;
@@ -84,7 +102,14 @@ public partial class LayersPanelControl : UserControl
         _dragGroupControls     = new List<Control>();
         _pendingSelectionApply = null;
 
-        if (doc is null) return;
+        if (doc is null)
+        {
+            _collapsed.Clear();
+            return;
+        }
+
+        // a layer that left the document (another file opened) drops its collapse state
+        _collapsed.RemoveWhere(l => !doc.Layers.Contains(l));
 
         // show top layer first (reverse render order)
         for (int li = doc.Layers.Count - 1; li >= 0; li--)
@@ -108,7 +133,54 @@ public partial class LayersPanelControl : UserControl
 
         // sync selection highlight after rebuild
         OnCanvasSelectionChanged(null, EventArgs.Empty);
+        ApplyFilter();
     }
+
+    /// <summary>applies collapse and search to the built rows; a search opens every collapsed layer until it is cleared</summary>
+    private void ApplyFilter()
+    {
+        var  query     = SearchBox.Text?.Trim() ?? string.Empty;
+        bool searching = query.Length > 0;
+        ClearSearchButton.IsVisible = searching;
+
+        bool Matches(string? name) =>
+            !string.IsNullOrEmpty(name) && name.Contains(query, StringComparison.OrdinalIgnoreCase);
+
+        foreach (var meta in _allRows)
+        {
+            double opacity;
+            if (meta.Kind == RowKind.Element)
+            {
+                meta.Border.IsVisible = searching || !_collapsed.Contains(meta.Layer);
+                opacity = !searching || Matches(meta.Element!.Name) ? 1.0 : SearchMissOpacity;
+            }
+            else
+            {
+                opacity = !searching || Matches(meta.Layer.Name)          ? 1.0
+                        : meta.Layer.Elements.Any(el => Matches(el.Name)) ? SearchChildOpacity
+                        :                                                   SearchMissOpacity;
+            }
+
+            // the row content fades, not the Border, so the selection background stays at full strength
+            if (meta.Border.Child is { } content) content.Opacity = opacity;
+        }
+
+        foreach (var (layer, btn) in _collapseButtons)
+        {
+            bool collapsed = !searching && _collapsed.Contains(layer);
+            btn.Content   = collapsed ? "▸" : "▾";
+            btn.IsEnabled = !searching;
+            ToolTip.SetTip(btn, searching ? "Expanded while searching" : collapsed ? "Expand" : "Collapse");
+        }
+    }
+
+    private void ToggleCollapsed(GtLayer layer)
+    {
+        if (!_collapsed.Remove(layer)) _collapsed.Add(layer);
+        ApplyFilter();
+    }
+
+    private void ClearSearchButton_Click(object? sender, RoutedEventArgs e) => SearchBox.Text = string.Empty;
 
     private void AttachDragHandlers(Border border)
     {
@@ -221,6 +293,8 @@ public partial class LayersPanelControl : UserControl
 
         for (int i = 0; i < children.Count; i++)
         {
+            // rows of a collapsed layer take no space, a drop past its header lands after them
+            if (!children[i].IsVisible) continue;
             var h = children[i].Bounds.Height;
             if (h <= 0) h = 28;
             if (pointerY < accY + h / 2) { insertIdx = i; break; }
@@ -397,7 +471,24 @@ public partial class LayersPanelControl : UserControl
             Margin            = new Thickness(4, 0, 0, 0),
         };
 
+        // Button marks its own press handled, so the click never reaches the header's select/drag handlers
+        var collapseBtn = new Button
+        {
+            Width                      = 16,
+            Height                     = 22,
+            Padding                    = new Thickness(0),
+            FontSize                   = 10,
+            Background                 = Brushes.Transparent,
+            BorderThickness            = new Thickness(0),
+            Foreground                 = new SolidColorBrush(Color.Parse("#999999")),
+            VerticalContentAlignment   = VerticalAlignment.Center,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+        };
+        collapseBtn.Click += (_, _) => ToggleCollapsed(layer);
+        _collapseButtons[layer] = collapseBtn;
+
         var inner = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        inner.Children.Add(collapseBtn);
         inner.Children.Add(visBtn);
         inner.Children.Add(lockBtn);
         inner.Children.Add(nameBlock);
@@ -405,7 +496,7 @@ public partial class LayersPanelControl : UserControl
         var header = new Border
         {
             Background = new SolidColorBrush(Color.Parse("#1e1e1e")),
-            Padding    = new Thickness(6, 4, 6, 4),
+            Padding    = new Thickness(2, 4, 6, 4),
             Cursor     = new Cursor(StandardCursorType.SizeNorthSouth),
             Child      = inner,
         };
@@ -456,7 +547,7 @@ public partial class LayersPanelControl : UserControl
         var rowBorder = new Border
         {
             Background = Brushes.Transparent,
-            Padding    = new Thickness(22, 2, 6, 2),
+            Padding    = new Thickness(36, 2, 6, 2),
             Cursor     = new Cursor(StandardCursorType.SizeNorthSouth),
             Child      = inner,
         };
@@ -468,23 +559,33 @@ public partial class LayersPanelControl : UserControl
             if (_canvas is null) return;
             if (!e.GetCurrentPoint(rowBorder).Properties.IsLeftButtonPressed) return;
 
+            // Explorer-style: Ctrl toggles one row, Shift selects the range from the anchor, Ctrl+Shift adds that range
             var shift      = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+            var ctrl       = e.KeyModifiers.HasFlag(KeyModifiers.Control);
             var selected   = _canvas.SelectedElements;
-            bool inMultiSel = !shift && selected.Contains(element) && selected.Count > 1;
+            bool inMultiSel = !shift && !ctrl && selected.Contains(element) && selected.Count > 1;
 
             if (shift)
             {
+                SelectRange(element, addToSelection: ctrl);
+                _pendingSelectionApply = null;
+            }
+            else if (ctrl)
+            {
                 _canvas.ToggleSelection(element);
+                _selectionAnchor       = element;
                 _pendingSelectionApply = null;
             }
             else if (inMultiSel)
             {
                 // Defer: could be start of multi-element drag
+                _selectionAnchor       = element;
                 _pendingSelectionApply = element;
             }
             else
             {
                 _canvas.SetSelection(element, false);
+                _selectionAnchor       = element;
                 _pendingSelectionApply = null;
             }
         };
@@ -818,7 +919,7 @@ public partial class LayersPanelControl : UserControl
         // macros: multi-step edits offered per element type, only text has one so far
         var macroSeparator = new Separator { IsVisible = false };
         var dataDrivenColor = new MenuItem { Header = "Convert to Data Driven Color", IsVisible = false };
-        dataDrivenColor.Click += (_, _) => ConvertToDataDrivenColorRequested?.Invoke(element);
+        dataDrivenColor.Click += (_, _) => ConvertToDataDrivenColorRequested?.Invoke(DataDrivenColorTargets(layer, element));
 
         var menu = new ContextMenu();
         menu.Items.Add(rename);
@@ -851,10 +952,25 @@ public partial class LayersPanelControl : UserControl
             macroSeparator.IsVisible  = isText;
             dataDrivenColor.IsVisible = isText;
             // the macro adds an element and rewrites the text, so a lock anywhere in the way stops it
-            dataDrivenColor.IsEnabled = isText && !element.Locked && !layer.Locked;
+            int textCount = DataDrivenColorTargets(layer, element).Count;
+            dataDrivenColor.IsEnabled = isText && textCount > 0;
+            dataDrivenColor.Header    = textCount > 1
+                ? $"Convert {textCount} Elements to Data Driven Color"
+                : "Convert to Data Driven Color";
         };
 
         return menu;
+    }
+
+    /// <summary>unlocked text elements of the selection the clicked row belongs to, or just the clicked row when it sits outside the selection</summary>
+    private List<GtElement> DataDrivenColorTargets(GtLayer layer, GtElement element)
+    {
+        var unlocked = DeletableSelection();
+        if (!unlocked.Any(t => ReferenceEquals(t.Element, element)))
+            return element is GtTextBlock && !element.Locked && !layer.Locked
+                ? [element]
+                : [];
+        return unlocked.Select(t => t.Element).Where(e => e is GtTextBlock).ToList();
     }
 
     /// <summary>frames behind the sequence an element draws, 1 for an ordinary still</summary>
@@ -870,7 +986,7 @@ public partial class LayersPanelControl : UserControl
     public Action<GtElement>? AddSequenceAnimationRequested { get; set; }
 
     /// <summary>host hook: run the text macro that puts a mask-driven colour rectangle over this text element; the host owns the document, the naming and the history entry</summary>
-    public Action<GtElement>? ConvertToDataDrivenColorRequested { get; set; }
+    public Action<IReadOnlyList<GtElement>>? ConvertToDataDrivenColorRequested { get; set; }
 
     /// <summary>F2 entry point, returns false when there is nothing to rename</summary>
     public bool BeginRenameFocused()
@@ -900,6 +1016,9 @@ public partial class LayersPanelControl : UserControl
 
         int idx = host.Children.IndexOf(meta.NameBlock);
         if (idx < 0) return false;
+
+        // F2 on a canvas selection can target a row hidden inside a collapsed layer
+        if (element is not null && _collapsed.Remove(layer)) ApplyFilter();
 
         var box = new TextBox
         {
@@ -1436,6 +1555,36 @@ public partial class LayersPanelControl : UserControl
                 : $"Delete {removed.Count} elements",
             undo: Restore, redo: Remove));
         return true;
+    }
+
+    // selects every element row between the anchor and target, in panel order; the anchor stays put so repeated shift-clicks pivot around it
+    private void SelectRange(GtElement target, bool addToSelection)
+    {
+        if (_canvas is null) return;
+
+        var rows = _allRows.Where(r => r.Kind == RowKind.Element).Select(r => r.Element!).ToList();
+
+        // anchor dropped out of the selection (canvas click, rebuild, ...) -> fall back to the topmost selected row
+        var anchor = _selectionAnchor;
+        if (anchor is null || !rows.Contains(anchor) || !_canvas.SelectedElements.Contains(anchor))
+            anchor = rows.FirstOrDefault(r => _canvas.SelectedElements.Contains(r)) ?? target;
+
+        int a = rows.IndexOf(anchor), b = rows.IndexOf(target);
+        if (a < 0 || b < 0) return;
+        var range = rows.GetRange(Math.Min(a, b), Math.Abs(a - b) + 1);
+
+        if (addToSelection)
+        {
+            foreach (var el in range)
+                if (!_canvas.SelectedElements.Contains(el))
+                    _canvas.SetSelection(el, addToSelection: true);
+        }
+        else
+        {
+            SelectOnly(range);
+        }
+
+        _selectionAnchor = anchor;
     }
 
     private void SelectOnly(IEnumerable<GtElement> elements)

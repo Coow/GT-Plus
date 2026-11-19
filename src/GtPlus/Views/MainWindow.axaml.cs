@@ -1031,7 +1031,7 @@ public partial class MainWindow : Window
 
     private void SetZoom(double zoom)
     {
-        _zoom = Math.Clamp(zoom, 0.10, 4.0);
+        _zoom = Math.Clamp(zoom, 0.10, 10.0);
         GtCanvas.Zoom = _zoom;
 
         _suppressSliderEvent = true;
@@ -1091,9 +1091,13 @@ public partial class MainWindow : Window
     {
         var props = e.GetCurrentPoint(CanvasScrollViewer).Properties;
 
-        // left-click outside the canvas deselects everything
-        if (props.IsLeftButtonPressed && e.Source is not Controls.GtCanvasControl)
-            GtCanvas.ClearSelection();
+        // a left press on the pasteboard outside the canvas goes to the canvas as if it were on it, so a box selection (or a draw) can start out there; the scrollbars keep their own clicks
+        if (props.IsLeftButtonPressed && e.Source is not Controls.GtCanvasControl &&
+            (e.Source as Visual)?.FindAncestorOfType<ScrollBar>(includeSelf: true) is null)
+        {
+            GtCanvas.HandleOutsidePress(e);
+            return;
+        }
 
         if (!props.IsMiddleButtonPressed) return;
 
@@ -2116,91 +2120,116 @@ public partial class MainWindow : Window
     }
 
     /// <summary>text macro: lays a rectangle over the text element, masked by it, and takes the text itself to 0% opacity; the glyphs then show the rectangle's fill, which is a data field GT can drive (<c>Name.Fill.Color</c>) where the text's own fill is not. Geometry, anchor and rotation are copied so the mask lines up, and the rectangle goes directly above the text so nothing else changes z-order</summary>
-    private void ConvertToDataDrivenColor(GtElement element)
+    private void ConvertToDataDrivenColor(IReadOnlyList<GtElement> elements)
     {
         var doc = GtCanvas.Document;
         if (doc is null) return;
 
-        if (element is not GtTextBlock text)
+        var texts = elements.OfType<GtTextBlock>().ToList();
+        if (texts.Count == 0)
         {
             StatusText.Text = "Convert to Data Driven Color: text element required";
             return;
         }
 
-        var layer = FindLayer(doc, text);
-        if (layer is null) return;
+        var taken = CollectElementNames(doc);
+        var steps = new List<(GtLayer Layer, GtTextBlock Text, GtRectangleElement Rect, string NameBefore, string NameAfter, double OpacityBefore)>();
+        int skippedLocked = 0;
 
-        if (layer.Locked || text.Locked)
+        foreach (var text in texts)
+        {
+            var layer = FindLayer(doc, text);
+            if (layer is null) continue;
+
+            if (layer.Locked || text.Locked)
+            {
+                skippedLocked++;
+                continue;
+            }
+
+            // the mask is resolved by name, so an unnamed text block gets one before it can be referenced
+            var nameBefore = text.Name;
+            var nameAfter  = string.IsNullOrEmpty(text.Name) ? UniqueName(taken, "TextBox", 1) : text.Name;
+            taken.Add(nameAfter);
+
+            var rectName = nameAfter + "Color";
+            if (taken.Contains(rectName)) rectName = UniqueName(taken, rectName, 2);
+            taken.Add(rectName);
+
+            var rect = new GtRectangleElement
+            {
+                Name       = rectName,
+                Location   = text.Location,
+                Dimensions = text.Dimensions,
+                Anchor     = text.Anchor,
+                Z          = text.Z,
+                Depth      = text.Depth,
+                RotateX    = text.RotateX,
+                RotateY    = text.RotateY,
+                RotateZ    = text.RotateZ,
+                MaskObject = nameAfter,
+                // rounded corners would clip glyphs sitting near the box edges
+                Style      = GtRectangleStyle.Square,
+                // the colour the text was painted in, so the macro leaves the picture unchanged
+                Fill       = text.Fill?.Clone()
+                             ?? new GtBrush { Type = GtBrushType.Solid, Color = Avalonia.Media.Colors.White },
+            };
+
+            steps.Add((layer, text, rect, nameBefore, nameAfter, text.Opacity));
+        }
+
+        if (steps.Count == 0)
         {
             StatusText.Text = "Convert to Data Driven Color: element is locked";
             return;
         }
 
-        var taken = CollectElementNames(doc);
-
-        // the mask is resolved by name, so an unnamed text block gets one before it can be referenced
-        var nameBefore = text.Name;
-        var nameAfter  = string.IsNullOrEmpty(text.Name) ? UniqueName(taken, "TextBox", 1) : text.Name;
-        taken.Add(nameAfter);
-
-        var rectName = nameAfter + "Color";
-        if (taken.Contains(rectName)) rectName = UniqueName(taken, rectName, 2);
-
-        var rect = new GtRectangleElement
-        {
-            Name       = rectName,
-            Location   = text.Location,
-            Dimensions = text.Dimensions,
-            Anchor     = text.Anchor,
-            Z          = text.Z,
-            Depth      = text.Depth,
-            RotateX    = text.RotateX,
-            RotateY    = text.RotateY,
-            RotateZ    = text.RotateZ,
-            MaskObject = nameAfter,
-            // rounded corners would clip glyphs sitting near the box edges
-            Style      = GtRectangleStyle.Square,
-            // the colour the text was painted in, so the macro leaves the picture unchanged
-            Fill       = text.Fill?.Clone()
-                         ?? new GtBrush { Type = GtBrushType.Solid, Color = Avalonia.Media.Colors.White },
-        };
-
-        var opacityBefore = text.Opacity;
-        var index         = layer.Elements.IndexOf(text) + 1;
-
-        void Select(GtElement selected)
+        void Select(IEnumerable<GtElement> selected)
         {
             LayersPanel.Populate(doc);
             TimelinePanel.Populate(doc);
-            GtCanvas.SetSelection(selected);
+            GtCanvas.ClearSelection();
+            foreach (var el in selected) GtCanvas.SetSelection(el, addToSelection: true);
             GtCanvas.InvalidateVisual();
         }
 
         void Apply()
         {
-            text.Name    = nameAfter;
-            text.Opacity = 0;
-            if (!layer.Elements.Contains(rect))
-                layer.Elements.Insert(Math.Min(index, layer.Elements.Count), rect);
-            Select(rect);
+            foreach (var (layer, text, rect, _, nameAfter, _) in steps)
+            {
+                text.Name    = nameAfter;
+                text.Opacity = 0;
+                // directly above the text, looked up now since earlier steps may have shifted indices
+                if (!layer.Elements.Contains(rect))
+                    layer.Elements.Insert(layer.Elements.IndexOf(text) + 1, rect);
+            }
+            Select(steps.Select(s => (GtElement)s.Rect));
         }
 
         void Revert()
         {
-            layer.Elements.Remove(rect);
-            text.Opacity = opacityBefore;
-            text.Name    = nameBefore;
-            Select(text);
+            for (int i = steps.Count - 1; i >= 0; i--)
+            {
+                var (layer, text, rect, nameBefore, _, opacityBefore) = steps[i];
+                layer.Elements.Remove(rect);
+                text.Opacity = opacityBefore;
+                text.Name    = nameBefore;
+            }
+            Select(steps.Select(s => (GtElement)s.Text));
         }
 
         Apply();
 
+        var label = steps.Count == 1 ? steps[0].NameAfter : $"{steps.Count} text elements";
         _history.Push(new PropertyChangeAction(
-            $"Data driven color for {nameAfter}",
+            $"Data driven color for {label}",
             undo: Revert,
             redo: Apply));
 
-        StatusText.Text = $"Added {rectName} masked by {nameAfter}";
+        StatusText.Text = steps.Count == 1
+            ? $"Added {steps[0].Rect.Name} masked by {steps[0].NameAfter}"
+            : $"Added {steps.Count} color rectangles";
+        if (skippedLocked > 0) StatusText.Text += $" ({skippedLocked} locked skipped)";
     }
 
     private void ReplaceWithText_Click(object? sender, RoutedEventArgs e)
@@ -2466,7 +2495,7 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    /// <summary>each dropped image is added centred on the pointer, later ones cascading so a multi-file drop does not stack them exactly on top of each other; a dropped folder is added whole, as one image sequence per folder</summary>
+    /// <summary>each dropped image lands at the canvas origin, shrunk to fit when it is bigger than the canvas; with Shift held it is instead added centred on the pointer at native size, later ones cascading so a multi-file drop does not stack them exactly on top of each other; a dropped folder is added whole, as one image sequence per folder</summary>
     private void OnCanvasDrop(object? sender, DragEventArgs e)
     {
         e.Handled = true;
@@ -2482,14 +2511,16 @@ public partial class MainWindow : Window
 
         e.DragEffects = DragDropEffects.Copy;
 
-        var screenPt = e.GetPosition(GtCanvas);
-        var docPt    = new Point(screenPt.X / _zoom, screenPt.Y / _zoom);
+        var atPointer = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        var screenPt  = e.GetPosition(GtCanvas);
+        var docPt     = new Point(screenPt.X / _zoom, screenPt.Y / _zoom);
+
+        Point? DropPoint(int i) => atPointer ? new Point(docPt.X + i * 20.0, docPt.Y + i * 20.0) : null;
 
         int added = 0;
         for (int i = 0; i < paths.Count; i++)
         {
-            var offset = i * 20.0;
-            if (AddImageFromFile(paths[i], new Point(docPt.X + offset, docPt.Y + offset)) is not null)
+            if (AddImageFromFile(paths[i], DropPoint(i), fitToCanvas: !atPointer) is not null)
                 added++;
         }
 
@@ -2502,10 +2533,7 @@ public partial class MainWindow : Window
 
         // folders are added after the loose files so the sequence's own status line has the last word
         for (int i = 0; i < folders.Count; i++)
-        {
-            var offset = (paths.Count + i) * 20.0;
-            _ = AddImageSequenceFromFolderAsync(folders[i], new Point(docPt.X + offset, docPt.Y + offset));
-        }
+            _ = AddImageSequenceFromFolderAsync(folders[i], DropPoint(paths.Count + i), fitToCanvas: !atPointer);
     }
 
     private async System.Threading.Tasks.Task InsertImageAsync()
@@ -2549,7 +2577,7 @@ public partial class MainWindow : Window
     }
 
     /// <summary>adds every image directly inside a folder as one sequence, in natural frame order</summary>
-    private async System.Threading.Tasks.Task AddImageSequenceFromFolderAsync(string folder, Point? docPoint)
+    private async System.Threading.Tasks.Task AddImageSequenceFromFolderAsync(string folder, Point? docPoint, bool fitToCanvas = false)
     {
         if (GtCanvas.Document is null) return;
 
@@ -2573,11 +2601,11 @@ public partial class MainWindow : Window
 
         if (frames.Count == 1)
         {
-            AddImageFromFile(frames[0], docPoint);
+            AddImageFromFile(frames[0], docPoint, fitToCanvas);
             return;
         }
 
-        await AddImageSequenceAsync(frames, Path.GetFileName(folder.TrimEnd('/', '\\')), docPoint);
+        await AddImageSequenceAsync(frames, Path.GetFileName(folder.TrimEnd('/', '\\')), docPoint, fitToCanvas);
     }
 
     /// <summary>a sequence's asset folder is named after its first frame with the frame number stripped, so GameOpener00000.png yields "GameOpener"</summary>
@@ -2590,7 +2618,7 @@ public partial class MainWindow : Window
 
     /// <summary>adds an ordered frame list as one image sequence resource plus the image element anchored on frame 0; the frames are read off disk on a worker thread since a render folder runs to hundreds of files</summary>
     private async System.Threading.Tasks.Task<GtImageElement?> AddImageSequenceAsync(
-        List<string> framePaths, string nameHint, Point? docPoint)
+        List<string> framePaths, string nameHint, Point? docPoint, bool fitToCanvas = false)
     {
         var doc = GtCanvas.Document;
         if (doc is null) return null;
@@ -2610,25 +2638,13 @@ public partial class MainWindow : Window
             }
 
             var layer = GetOrCreateDefaultLayer(doc);
-
-            // dropped sequences land centred under the pointer and may hang off the canvas; the picker path stays clamped inside it
-            double localX, localY;
-            if (docPoint is { } p)
-            {
-                localX = p.X - imgWidth  / 2 - layer.Location.X;
-                localY = p.Y - imgHeight / 2 - layer.Location.Y;
-            }
-            else
-            {
-                localX = Math.Max(0, (doc.Width  - imgWidth)  / 2 - layer.Location.X);
-                localY = Math.Max(0, (doc.Height - imgHeight) / 2 - layer.Location.Y);
-            }
+            var (location, dimensions) = NewImageBox(doc, layer, imgWidth, imgHeight, docPoint, fitToCanvas);
 
             var element = new GtImageElement
             {
                 Name         = GenerateElementName(doc, "Sequence"),
-                Location     = new GtPoint(localX, localY),
-                Dimensions   = new GtSize(imgWidth, imgHeight),
+                Location     = location,
+                Dimensions   = dimensions,
                 BitmapSource = built.Anchor,   // document.xml only ever names the anchor, the frames live in resources.xml
             };
 
@@ -2671,8 +2687,28 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>adds one image file to the document as a GtImageElement at its native pixel size; <paramref name="docPoint"/> is an absolute doc-space point the image is centred on (a drag-and-drop landing spot), null centres it on the canvas like the toolbar button does</summary>
-    private GtImageElement? AddImageFromFile(string path, Point? docPoint)
+    /// <summary>the layer-local box a new image lands in: <paramref name="fitToCanvas"/> puts it at the canvas origin, shrunk with its aspect kept when it is bigger than the canvas (a plain drop); otherwise it keeps its native pixel size, centred under <paramref name="docPoint"/> and free to hang off the canvas (a Shift drop), or centred on the canvas and clamped inside it when there is no point (the picker)</summary>
+    private static (GtPoint Location, GtSize Dimensions) NewImageBox(
+        GtDocument doc, GtLayer layer, double imgWidth, double imgHeight, Point? docPoint, bool fitToCanvas)
+    {
+        if (fitToCanvas)
+        {
+            // new images default to SizeMode Centered, a uniform fit, so the shrunk box still draws the whole bitmap undistorted
+            double scale = Math.Min(1, Math.Min(doc.Width / imgWidth, doc.Height / imgHeight));
+            return (new GtPoint(-layer.Location.X, -layer.Location.Y),
+                    new GtSize(Math.Round(imgWidth * scale), Math.Round(imgHeight * scale)));
+        }
+
+        var size = new GtSize(imgWidth, imgHeight);
+        if (docPoint is { } p)
+            return (new GtPoint(p.X - imgWidth / 2 - layer.Location.X, p.Y - imgHeight / 2 - layer.Location.Y), size);
+
+        return (new GtPoint(Math.Max(0, (doc.Width  - imgWidth)  / 2 - layer.Location.X),
+                            Math.Max(0, (doc.Height - imgHeight) / 2 - layer.Location.Y)), size);
+    }
+
+    /// <summary>adds one image file to the document as a GtImageElement; <paramref name="docPoint"/> and <paramref name="fitToCanvas"/> pick where it lands, see <see cref="NewImageBox"/></summary>
+    private GtImageElement? AddImageFromFile(string path, Point? docPoint, bool fitToCanvas = false)
     {
         try
         {
@@ -2680,7 +2716,8 @@ public partial class MainWindow : Window
                 File.ReadAllBytes(path),
                 Path.GetExtension(path).TrimStart('.').ToLowerInvariant(),
                 Path.GetFileNameWithoutExtension(path),
-                docPoint);
+                docPoint,
+                fitToCanvas);
         }
         catch (Exception ex)
         {
@@ -2691,7 +2728,7 @@ public partial class MainWindow : Window
     }
 
     /// <summary>adds already-decoded image bytes as an element; <paramref name="extension"/> and <paramref name="nameHint"/> only shape the asset's logical path, the blob is stored verbatim so a pasted or dropped file keeps its original encoding</summary>
-    private GtImageElement? AddImageFromBytes(byte[] bytes, string extension, string nameHint, Point? docPoint)
+    private GtImageElement? AddImageFromBytes(byte[] bytes, string extension, string nameHint, Point? docPoint, bool fitToCanvas = false)
     {
         var doc = GtCanvas.Document;
         if (doc is null) return null;
@@ -2711,25 +2748,13 @@ public partial class MainWindow : Window
             GtCanvas.SetAssets(_currentAssets);
 
             var layer = GetOrCreateDefaultLayer(doc);
-
-            // dropped images land centred under the pointer and may hang off the canvas; the picker path stays clamped inside it
-            double localX, localY;
-            if (docPoint is { } p)
-            {
-                localX = p.X - imgWidth  / 2 - layer.Location.X;
-                localY = p.Y - imgHeight / 2 - layer.Location.Y;
-            }
-            else
-            {
-                localX = Math.Max(0, (doc.Width  - imgWidth)  / 2 - layer.Location.X);
-                localY = Math.Max(0, (doc.Height - imgHeight) / 2 - layer.Location.Y);
-            }
+            var (location, dimensions) = NewImageBox(doc, layer, imgWidth, imgHeight, docPoint, fitToCanvas);
 
             var element = new GtImageElement
             {
                 Name         = GenerateElementName(doc, "Image"),
-                Location     = new GtPoint(localX, localY),
-                Dimensions   = new GtSize(imgWidth, imgHeight),
+                Location     = location,
+                Dimensions   = dimensions,
                 BitmapSource = logicalPath,
             };
 
