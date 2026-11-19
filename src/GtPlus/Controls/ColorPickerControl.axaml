@@ -1,9 +1,54 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="GtPlus.Controls.ColorPickerControl"
-             Width="300">
+             Width="300"
+             Focusable="True"
+             FocusAdorner="{x:Null}">
 
     <UserControl.Styles>
+        <!-- transparent background not none, stretched not centred: the label is a drag-to-scrub target and has to be hit-testable across its whole cell -->
+        <Style Selector="TextBlock.label">
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Foreground" Value="#888888"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="TextAlignment" Value="Center"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Border.field">
+            <Setter Property="Background" Value="#2d2d2d"/>
+            <Setter Property="BorderBrush" Value="#484848"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="3"/>
+        </Style>
+        <Style Selector="Border.field:focus-within">
+            <Setter Property="BorderBrush" Value="#6a6a6a"/>
+        </Style>
+        <Style Selector="TextBox.field">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="3,2"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="HorizontalContentAlignment" Value="Right"/>
+        </Style>
+        <Style Selector="TextBox.field:pointerover /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="TextBox.field:focus /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="TextBox.field:pointerover">
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style Selector="TextBox.field:focus">
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
         <Style Selector="Button#GradientButton">
             <Setter Property="Background" Value="#2d2d2d"/>
             <Setter Property="BorderBrush" Value="#484848"/>
@@ -95,8 +140,9 @@
                 </Canvas>
             </Panel>
 
-            <!-- preview swatch + hex + copy/paste -->
-            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+            <!-- preview swatch + hex -->
+            <Grid ColumnDefinitions="Auto,*"
+                  ToolTip.Tip="Ctrl+C copies the colour as HEX, Ctrl+V pastes a HEX, rgb() or hsl() colour">
 
                 <!-- checkerboard + colour preview swatch -->
                 <Panel Grid.Column="0" Width="28" Height="28" Margin="0,0,6,0">
@@ -106,81 +152,56 @@
                             CornerRadius="3" BorderBrush="#444444" BorderThickness="1"/>
                 </Panel>
 
-                <!-- HEX display -->
-                <Border Grid.Column="1"
-                        Background="#2d2d2d" BorderBrush="#484848"
-                        BorderThickness="1" CornerRadius="3"
-                        Padding="4,2" VerticalAlignment="Center">
-                    <TextBlock x:Name="HexText"
-                               Text="#FFFFFFFF"
-                               Foreground="White"
-                               FontSize="11"
-                               FontFamily="Consolas,Courier New,monospace"
-                               VerticalAlignment="Center"/>
+                <!-- HEX entry: #RGB, #RRGGBB or #AARRGGBB, the # is optional -->
+                <Border Grid.Column="1" Classes="field" VerticalAlignment="Center">
+                    <TextBox x:Name="HexBox"
+                             Classes="field"
+                             Text="#FFFFFFFF"
+                             FontSize="11"
+                             FontFamily="Consolas,Courier New,monospace"
+                             HorizontalContentAlignment="Left"/>
                 </Border>
-
-                <!-- paste HEX from clipboard (icon set in code-behind) -->
-                <Button Grid.Column="2"
-                        x:Name="PasteHexButton"
-                        FontSize="11"
-                        Width="28" Height="28"
-                        Padding="4"
-                        Margin="4,0,0,0"
-                        ToolTip.Tip="Paste HEX from clipboard"
-                        HorizontalContentAlignment="Center"
-                        VerticalContentAlignment="Center"
-                        Click="PasteHexButton_Click"/>
-
-                <!-- copy HEX to clipboard (icon set in code-behind) -->
-                <Button Grid.Column="3"
-                        x:Name="CopyHexButton"
-                        FontSize="13"
-                        Width="28" Height="28"
-                        Padding="4"
-                        Margin="2,0,0,0"
-                        ToolTip.Tip="Copy HEX to clipboard"
-                        HorizontalContentAlignment="Center"
-                        VerticalContentAlignment="Center"
-                        Click="CopyHexButton_Click"/>
 
             </Grid>
 
-            <!-- RGBA display -->
+            <!-- RGBA entry -->
             <Grid ColumnDefinitions="14,*,3,14,*,3,14,*,3,14,*">
-                <TextBlock Grid.Column="0" Text="R" FontSize="10"
-                           Foreground="#888888" VerticalAlignment="Center"
-                           HorizontalAlignment="Center"/>
-                <Border Grid.Column="1" Background="#2d2d2d" BorderBrush="#484848"
-                        BorderThickness="1" CornerRadius="3" Padding="3,2">
-                    <TextBlock x:Name="RText" FontSize="10" Foreground="White"
-                               VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                <TextBlock Grid.Column="0" x:Name="RLabel" Text="R" Classes="label"/>
+                <Border Grid.Column="1" Classes="field">
+                    <TextBox x:Name="RBox" Classes="field"/>
                 </Border>
 
-                <TextBlock Grid.Column="3" Text="G" FontSize="10"
-                           Foreground="#888888" VerticalAlignment="Center"
-                           HorizontalAlignment="Center"/>
-                <Border Grid.Column="4" Background="#2d2d2d" BorderBrush="#484848"
-                        BorderThickness="1" CornerRadius="3" Padding="3,2">
-                    <TextBlock x:Name="GText" FontSize="10" Foreground="White"
-                               VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                <TextBlock Grid.Column="3" x:Name="GLabel" Text="G" Classes="label"/>
+                <Border Grid.Column="4" Classes="field">
+                    <TextBox x:Name="GBox" Classes="field"/>
                 </Border>
 
-                <TextBlock Grid.Column="6" Text="B" FontSize="10"
-                           Foreground="#888888" VerticalAlignment="Center"
-                           HorizontalAlignment="Center"/>
-                <Border Grid.Column="7" Background="#2d2d2d" BorderBrush="#484848"
-                        BorderThickness="1" CornerRadius="3" Padding="3,2">
-                    <TextBlock x:Name="BText" FontSize="10" Foreground="White"
-                               VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                <TextBlock Grid.Column="6" x:Name="BLabel" Text="B" Classes="label"/>
+                <Border Grid.Column="7" Classes="field">
+                    <TextBox x:Name="BBox" Classes="field"/>
                 </Border>
 
-                <TextBlock Grid.Column="9" Text="A" FontSize="10"
-                           Foreground="#888888" VerticalAlignment="Center"
-                           HorizontalAlignment="Center"/>
-                <Border Grid.Column="10" Background="#2d2d2d" BorderBrush="#484848"
-                        BorderThickness="1" CornerRadius="3" Padding="3,2">
-                    <TextBlock x:Name="AText" FontSize="10" Foreground="White"
-                               VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                <TextBlock Grid.Column="9" x:Name="ALabel" Text="A" Classes="label"/>
+                <Border Grid.Column="10" Classes="field">
+                    <TextBox x:Name="ABox" Classes="field"/>
+                </Border>
+            </Grid>
+
+            <!-- HSL entry: hue in degrees, saturation and lightness in percent -->
+            <Grid ColumnDefinitions="14,*,3,14,*,3,14,*,3,14,*">
+                <TextBlock Grid.Column="0" x:Name="HLabel" Text="H" Classes="label"/>
+                <Border Grid.Column="1" Classes="field" ToolTip.Tip="Hue, 0-360°">
+                    <TextBox x:Name="HBox" Classes="field"/>
+                </Border>
+
+                <TextBlock Grid.Column="3" x:Name="SLabel" Text="S" Classes="label"/>
+                <Border Grid.Column="4" Classes="field" ToolTip.Tip="HSL saturation, 0-100%">
+                    <TextBox x:Name="SBox" Classes="field"/>
+                </Border>
+
+                <TextBlock Grid.Column="6" x:Name="LLabel" Text="L" Classes="label"/>
+                <Border Grid.Column="7" Classes="field" ToolTip.Tip="Lightness, 0-100%">
+                    <TextBox x:Name="LBox" Classes="field"/>
                 </Border>
             </Grid>
 

@@ -353,6 +353,8 @@ public partial class GradientEditorWindow : Window
                 IsLightDismissEnabled = true,
                 PlacementTarget       = PickColorButton,
             };
+            // a popup outside the logical tree gets no theme, and its text boxes never get a template
+            LogicalChildren.Add(_colorPopup);
         }
 
         _colorPicker.SetColor(_selected.Color);
