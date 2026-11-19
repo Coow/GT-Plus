@@ -237,7 +237,7 @@
                             ToolTip.Tip="Reset zoom to fit window" />
 
                     <Slider x:Name="ZoomSlider"
-                            Minimum="10" Maximum="400" Value="100"
+                            Minimum="10" Maximum="1000" Value="100"
                             Width="160"
                             VerticalAlignment="Center"
                             IsSnapToTickEnabled="False"
