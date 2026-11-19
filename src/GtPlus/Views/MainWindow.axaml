@@ -79,7 +79,7 @@
                 <MenuItem x:Name="RulersMenuItem"
                           Header="_Rulers"
                           ToggleType="CheckBox"
-                          InputGesture="Ctrl+R"
+                          InputGesture="Ctrl+Shift+R"
                           Click="ToggleRulers_Click" />
                 <Separator />
                 <MenuItem x:Name="ShowGuidesMenuItem"

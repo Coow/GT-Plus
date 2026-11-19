@@ -99,7 +99,8 @@ Don't automatically commit to git
   - Toolbar (left): Select (S), Edit (E), Text Box (T), Rectangle (R), Ticker (K), Web Page (W), Image (I) - ToggleButtons `SelectToolButton`/`EditToolButton`/`TextBoxToolButton`/`RectangleToolButton`/`TickerToolButton`
   - Right panel: tab strip (Layers / History) → `LayersPanel` / `HistoryPanel`; Debug panel below (toggled in Preferences)
   - Bottom bar: status text, Fit button, zoom slider + label
-  - `OnKeyDown`: S=Select, E=Edit, Ctrl+Z=Undo, Ctrl+Y=Redo, Ctrl+S=Save, Ctrl+Shift+S=SaveAs
+  - `OnKeyDown`: S=Select, E=Edit, Ctrl+Z=Undo, Ctrl+Y=Redo, Ctrl+S=Save, Ctrl+Shift+S=SaveAs, Ctrl/Cmd+O=Open, Ctrl/Cmd+R=Reload from disk, Ctrl+Shift+R=Rulers. Menu `InputGesture`s are display-only - every shortcut needs a case here
+  - Command line: `GtPlus <file.gtzip>` or `GtPlus --open <file>` (parsed in `App`, opened in `OnOpened` via `StartupPath`)
   - Middle-click drag = pan canvas; Ctrl+scroll = zoom
 - **`ExportVideoWindow.axaml/.cs`** - MP4 export dialog: storyboard (single, or the TransitionIn+TransitionOut pair), hold seconds, fps, quality, background, output path
 - **`SequenceLengthWindow.axaml/.cs`** - sets an ImageSequence clip's Duration from the sequence's

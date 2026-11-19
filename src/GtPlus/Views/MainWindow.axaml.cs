@@ -33,6 +33,9 @@ public partial class MainWindow : Window
     private string? _currentPath;
     private GtAssetLibrary _currentAssets = new();
 
+    /// <summary>file named on the command line, opened once the window is up</summary>
+    public string? StartupPath { get; init; }
+
     private double _zoom = 1.0;
     private bool _suppressSliderEvent;
 
@@ -191,6 +194,17 @@ public partial class MainWindow : Window
         base.OnOpened(e);
         RestoreWindowGeometry();
         FitToWindow();
+
+        if (StartupPath is not null)
+        {
+            if (File.Exists(StartupPath))
+                _ = OpenPath(StartupPath);
+            else
+            {
+                Logger.Warn($"Startup file not found: {StartupPath}");
+                StatusText.Text = $"File not found: {StartupPath}";
+            }
+        }
 
         if (_prefs.CheckUpdatesOnStartup) _ = CheckForUpdatesAtStartup();
     }
@@ -857,7 +871,16 @@ public partial class MainWindow : Window
                 SetTimelineVisible(!TimelinePanel.IsVisible);
                 e.Handled = true;
                 break;
-            case Key.R when e.KeyModifiers == KeyModifiers.Control:
+            // Ctrl on Windows/Linux, Cmd on macOS; the menu gestures are display-only, so the keys are wired here
+            case Key.O when e.KeyModifiers is KeyModifiers.Control or KeyModifiers.Meta:
+                _ = OpenFileAsync();
+                e.Handled = true;
+                break;
+            case Key.R when e.KeyModifiers is KeyModifiers.Control or KeyModifiers.Meta:
+                _ = ReloadFileAsync();
+                e.Handled = true;
+                break;
+            case Key.R when e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift):
                 SetRulersVisible(!TopRuler.IsVisible);
                 e.Handled = true;
                 break;
@@ -1367,6 +1390,16 @@ public partial class MainWindow : Window
         open.Click += OpenFile_Click;
         FileMenu.Items.Add(open);
 
+        var reload = new MenuItem
+        {
+            Header = "_Reload",
+            IsEnabled = _currentPath is not null,
+            InputGesture = new KeyGesture(Key.R, KeyModifiers.Control)
+        };
+        ToolTip.SetTip(reload, "Reopen the current file from disk");
+        reload.Click += async (_, _) => await ReloadFileAsync();
+        FileMenu.Items.Add(reload);
+
         var hasDoc = GtCanvas.Document is not null;
 
         var save = new MenuItem
@@ -1449,7 +1482,9 @@ public partial class MainWindow : Window
         FileMenu.Items.Add(exit);
     }
 
-    private async void OpenFile_Click(object? sender, RoutedEventArgs e)
+    private async void OpenFile_Click(object? sender, RoutedEventArgs e) => await OpenFileAsync();
+
+    private async System.Threading.Tasks.Task OpenFileAsync()
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
@@ -1469,9 +1504,80 @@ public partial class MainWindow : Window
         await OpenPath(path);
     }
 
-    private async System.Threading.Tasks.Task OpenPath(string path)
+    /// <summary>reopens the current file from disk; unsaved changes can be kept in a new file first, after which the original is still what gets reloaded</summary>
+    private async System.Threading.Tasks.Task ReloadFileAsync()
     {
-        if (!await ConfirmDiscardChanges()) return;
+        var path = _currentPath;
+        if (path is null)
+        {
+            StatusText.Text = "Nothing to reload - the document has never been saved";
+            return;
+        }
+
+        if (IsDirty)
+        {
+            switch (await AskReloadChoice())
+            {
+                case ReloadChoice.Cancel:
+                    return;
+                case ReloadChoice.SaveAs:
+                    if (!await DoSaveAs()) return;
+                    break;
+            }
+        }
+
+        await OpenPath(path, confirmDiscard: false);
+    }
+
+    private enum ReloadChoice { Cancel, SaveAs, Discard }
+
+    private async System.Threading.Tasks.Task<ReloadChoice> AskReloadChoice()
+    {
+        var dialog = new Window
+        {
+            Title = "Reload File",
+            Width = 440,
+            Height = 155,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = false,
+            ShowInTaskbar = false,
+        };
+
+        var cancelButton  = new Button { Content = "Cancel" };
+        var saveAsButton  = new Button { Content = "Save As New File...", Margin = new Thickness(8, 0, 0, 0) };
+        var discardButton = new Button { Content = "Discard and Reload",  Margin = new Thickness(8, 0, 0, 0) };
+
+        cancelButton.Click  += (_, _) => dialog.Close(ReloadChoice.Cancel);
+        saveAsButton.Click  += (_, _) => dialog.Close(ReloadChoice.SaveAs);
+        discardButton.Click += (_, _) => dialog.Close(ReloadChoice.Discard);
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(20),
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = "You have unsaved changes. Reloading the file will discard them.",
+                    TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 20)
+                },
+                new StackPanel
+                {
+                    Orientation = Avalonia.Layout.Orientation.Horizontal,
+                    HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+                    Children = { cancelButton, saveAsButton, discardButton }
+                }
+            }
+        };
+
+        // closing with the title bar's X returns the default, which is Cancel
+        return await dialog.ShowDialog<ReloadChoice>(this);
+    }
+
+    private async System.Threading.Tasks.Task OpenPath(string path, bool confirmDiscard = true)
+    {
+        if (confirmDiscard && !await ConfirmDiscardChanges()) return;
 
         try
         {
@@ -1626,9 +1732,10 @@ public partial class MainWindow : Window
         SaveToPath(_currentPath);
     }
 
-    private async System.Threading.Tasks.Task DoSaveAs()
+    /// <summary>true when the document was written; false when the picker was cancelled or the save failed</summary>
+    private async System.Threading.Tasks.Task<bool> DoSaveAs()
     {
-        if (GtCanvas.Document is null) return;
+        if (GtCanvas.Document is null) return false;
 
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
@@ -1644,15 +1751,15 @@ public partial class MainWindow : Window
         });
 
         var path = file?.TryGetLocalPath();
-        if (path is null) return;
+        if (path is null) return false;
 
-        if (SaveToPath(path))
-        {
-            _currentPath = path;
-            Title = $"GT+  -  {Path.GetFileName(path)}";
-            _recent.Add(path);
-            RebuildFileMenu();
-        }
+        if (!SaveToPath(path)) return false;
+
+        _currentPath = path;
+        Title = $"GT+  -  {Path.GetFileName(path)}";
+        _recent.Add(path);
+        RebuildFileMenu();
+        return true;
     }
 
     private bool SaveToPath(string path)
